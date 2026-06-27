@@ -31,10 +31,7 @@ app.use(
 );
 
 app.use(cors({
-  origin: [
-    process.env.APP_URL || 'http://localhost:3001',
-    'https://milepay-psi.vercel.app',
-  ],
+  origin: *,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
