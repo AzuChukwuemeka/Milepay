@@ -18,7 +18,19 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com"],
+        imgSrc: ["'self'", "data:", "cdnjs.cloudflare.com"],
+      },
+    },
+  })
+);
+
 app.use(cors({
   origin: [
     process.env.APP_URL || 'http://localhost:3001',
