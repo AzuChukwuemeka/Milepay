@@ -35,11 +35,11 @@ All errors return:
 }
 \`\`\`
       `,
-      contact: { name: 'MilePay Team', email: 'dev@milepay.ng' },
+    contact: { name: 'MilePay Team', email: 'chukwuemekaazu97@gmail.com' },
     },
     servers: [
       { url: 'http://localhost:3000/v1', description: 'Local Development' },
-      { url: 'https://api.milepay.ng/v1', description: 'Production' },
+      { url: 'https://milepay-drab.vercel.app/v1', description: 'Production' },
     ],
     components: {
       securitySchemes: {
