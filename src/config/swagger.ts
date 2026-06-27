@@ -145,7 +145,7 @@ All errors return:
       { name: 'Admin', description: 'Admin-only — disputes, users, transactions' },
     ],
   },
-  apis: ['./src/controllers/*.ts', './src/routes/*.ts'],
+  apis: ['./dist/controllers/*.js', './dist/routes/*.js']
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
