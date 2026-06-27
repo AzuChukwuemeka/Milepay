@@ -1,0 +1,174 @@
+import pool from '../config/database';
+import {
+  NombaTokenResponse,
+  NombaVirtualAccountResponse,
+  NombaTransferResponse,
+  NombaBankResolveResponse,
+} from '../types';
+
+// Auth always goes through api.nomba.com
+// Sandbox operations go through sandbox.nomba.com
+const NOMBA_AUTH_URL = 'https://api.nomba.com';
+const NOMBA_SANDBOX_URL = process.env.NOMBA_BASE_URL || 'https://sandbox.nomba.com';
+
+const CLIENT_ID = process.env.NOMBA_CLIENT_ID!;
+const CLIENT_SECRET = process.env.NOMBA_CLIENT_SECRET!;
+const PARENT_ACCOUNT_ID = process.env.NOMBA_PARENT_ACCOUNT_ID!;
+const SUB_ACCOUNT_ID = process.env.NOMBA_SUB_ACCOUNT_ID!;
+
+// ─── Token Management ─────────────────────────────────────────────────────────
+
+async function getCachedToken(): Promise<string | null> {
+  const result = await pool.query(
+    `SELECT access_token, expires_at FROM nomba_token_cache
+     WHERE expires_at > NOW() + INTERVAL '5 minutes'
+     ORDER BY created_at DESC LIMIT 1`
+  );
+  return result.rows[0]?.access_token ?? null;
+}
+
+async function cacheToken(accessToken: string, refreshToken: string, expiresAt: string): Promise<void> {
+  await pool.query('DELETE FROM nomba_token_cache');
+  await pool.query(
+    `INSERT INTO nomba_token_cache (access_token, refresh_token, expires_at)
+     VALUES ($1, $2, $3)`,
+    [accessToken, refreshToken, new Date(expiresAt)]
+  );
+}
+
+async function fetchNewToken(): Promise<string> {
+  const response = await fetch(`${NOMBA_AUTH_URL}/v1/auth/token/issue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'accountId': PARENT_ACCOUNT_ID,
+    },
+    body: JSON.stringify({
+      grant_type: 'client_credentials',
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Nomba auth failed: ${error}`);
+  }
+
+  const data = (await response.json()) as NombaTokenResponse;
+
+  if (data.code !== '00') {
+    throw new Error(`Nomba auth error: ${data.description}`);
+  }
+
+  await cacheToken(data.data.access_token, data.data.refresh_token, data.data.expiresAt);
+  return data.data.access_token;
+}
+
+export async function getNombaToken(): Promise<string> {
+  const cached = await getCachedToken();
+  if (cached) return cached;
+  return fetchNewToken();
+}
+
+// ─── Base request helper ──────────────────────────────────────────────────────
+
+async function nombaRequest<T>(
+  method: string,
+  path: string,
+  body?: Record<string, unknown>,
+  useSubAccount = true
+): Promise<T> {
+  const token = await getNombaToken();
+  const accountId = useSubAccount ? SUB_ACCOUNT_ID : PARENT_ACCOUNT_ID;
+
+  const response = await fetch(`${NOMBA_SANDBOX_URL}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'accountId': accountId,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const data = (await response.json()) as T & { code: string; description: string };
+
+  if (!response.ok || data.code !== '00') {
+    throw new Error(`Nomba API error [${path}]: ${data.description || response.statusText}`);
+  }
+
+  return data;
+}
+
+// ─── Virtual Accounts ─────────────────────────────────────────────────────────
+
+export async function createVirtualAccount(params: {
+  accountRef: string;
+  accountName: string;
+  expectedAmount?: number;
+  bvn?: string;
+}): Promise<NombaVirtualAccountResponse['data']> {
+  const data = await nombaRequest<NombaVirtualAccountResponse>(
+    'POST',
+    '/v1/accounts/virtual',
+    {
+      accountRef: params.accountRef,
+      accountName: params.accountName,
+      ...(params.expectedAmount && { expectedAmount: params.expectedAmount.toString() }),
+      ...(params.bvn && { bvn: params.bvn }),
+    }
+  );
+  return data.data;
+}
+
+// ─── Transfers ────────────────────────────────────────────────────────────────
+
+export async function initiateTransfer(params: {
+  amount: number;
+  bankCode: string;
+  accountNumber: string;
+  accountName: string;
+  narration: string;
+  idempotencyKey: string;
+}): Promise<NombaTransferResponse['data']> {
+  const data = await nombaRequest<NombaTransferResponse>(
+    'POST',
+    '/v2/transfers/bank',
+    {
+      amount: params.amount,
+      accountNumber: params.accountNumber,
+      bankCode: params.bankCode,
+      narration: params.narration,
+      merchantTxRef: params.idempotencyKey,
+    }
+  );
+  return data.data;
+}
+
+// ─── Bank Account Resolution ──────────────────────────────────────────────────
+
+export async function resolveBankAccount(params: {
+  accountNumber: string;
+  bankCode: string;
+}): Promise<NombaBankResolveResponse['data']> {
+  const data = await nombaRequest<NombaBankResolveResponse>(
+    'POST',
+    '/v1/transfers/bank/lookup',
+    {
+      accountNumber: params.accountNumber,
+      bankCode: params.bankCode,
+    }
+  );
+  return data.data;
+}
+
+// ─── Fetch Virtual Account Transactions ──────────────────────────────────────
+
+export async function fetchVirtualAccountTransactions(accountRef: string): Promise<unknown[]> {
+  const data = await nombaRequest<{ code: string; data: { results: unknown[] } }>(
+    'GET',
+    `/v1/accounts/virtual/${accountRef}/transactions`
+  );
+  return data.data.results;
+}
