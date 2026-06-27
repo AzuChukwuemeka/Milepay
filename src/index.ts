@@ -33,7 +33,7 @@ app.use(
 app.use(cors({
   origin: [
     process.env.APP_URL || 'http://localhost:3001',
-    'https://milepay-drab.vercel.app',
+    'https://milepay-psi.vercel.app',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
