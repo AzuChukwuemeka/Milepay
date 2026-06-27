@@ -134,9 +134,9 @@ const bootstrap = async (): Promise<void> => {
   startCronJobs();
 
   app.listen(PORT, () => {
-    console.log(`\n🚀 MilePay API running on http://https://milepay-drab.vercel.app);
-    console.log(`📚 Swagger docs at http://https://milepay-drab.vercel.app//docs`);
-    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}\n`);
+    console.log(`MilePay API running on http://https://milepay-drab.vercel.app);
+    console.log(`Swagger docs at http://https://milepay-drab.vercel.app/docs`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}\n`);
   });
 };
 
