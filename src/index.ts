@@ -22,17 +22,17 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "unpkg.com"],
-        styleSrc: ["'self'", "'unsafe-inline'", "unpkg.com"],
-        imgSrc: ["'self'", "data:", "unpkg.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
+        imgSrc: ["'self'", "data:", "https://unpkg.com"],
+        connectSrc: ["'self'", "https://unpkg.com"],
       },
     },
   })
 );
 
 app.use(cors({
-  origin: *,
-  credentials: true,
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -76,7 +76,6 @@ app.get('/docs.json', (_req, res) => {
 });
 
 app.get('/docs', (_req, res) => {
-  const apiUrl = process.env.API_URL || 'https://milepay-drab.vercel.app';
   res.setHeader('Content-Type', 'text/html');
   res.send(`
     <!DOCTYPE html>
@@ -99,7 +98,7 @@ app.get('/docs', (_req, res) => {
         <script>
           window.onload = function() {
             SwaggerUIBundle({
-              url: "${apiUrl}/docs.json",
+              spec: ${JSON.stringify(swaggerSpec)},
               dom_id: '#swagger-ui',
               presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
               layout: "StandaloneLayout",
@@ -129,8 +128,8 @@ const bootstrap = async (): Promise<void> => {
   startCronJobs();
 
   app.listen(PORT, () => {
-    console.log(`MilePay API running on https://milepay-drab.vercel.app`);
-    console.log(`Swagger docs at https://milepay-drab.vercel.app/docs`);
+    console.log(`MilePay API running on https://milepay-psi.vercel.app`);
+    console.log(`Swagger docs at https://milepay-psi.vercel.app/docs`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}\n`);
   });
 };
