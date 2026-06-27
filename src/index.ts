@@ -70,6 +70,11 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     .topbar-wrapper img { display: none; }
     .topbar-wrapper::after { content: "MilePay API"; color: #C98A1A; font-size: 20px; font-weight: bold; }
   `,
+  customCssUrl: 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui.min.css',
+  customJs: [
+    'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-bundle.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.js',
+  ],
   swaggerOptions: {
     persistAuthorization: true,
     displayRequestDuration: true,
