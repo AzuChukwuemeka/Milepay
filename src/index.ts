@@ -80,7 +80,7 @@ app.get('/docs.json', (_req, res) => {
 });
 
 app.get('/docs', (_req, res) => {
-  const apiUrl = process.env.API_URL || 'http://localhost:3000';
+  const apiUrl = process.env.API_URL || 'https://milepay-drab.vercel.app';
   res.setHeader('Content-Type', 'text/html');
   res.send(`
     <!DOCTYPE html>
@@ -103,7 +103,7 @@ app.get('/docs', (_req, res) => {
         <script>
           window.onload = function() {
             SwaggerUIBundle({
-              url: "${apiUrl}/docs.json",
+              url: "https://milepay-drab.vercel.app/docs.json",
               dom_id: '#swagger-ui',
               presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
               layout: "StandaloneLayout",
@@ -111,7 +111,7 @@ app.get('/docs', (_req, res) => {
               displayRequestDuration: true,
               docExpansion: 'none',
               filter: true,
-              servers: [{ url: "${apiUrl}/v1" }]
+              servers: [{ url: "https://milepay-drab.vercel.app" }]
             })
           }
         </script>
