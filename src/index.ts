@@ -32,8 +32,7 @@ app.use(
 
 app.use(cors({
   origin: [
-    process.env.APP_URL || 'http://localhost:3001',
-    'http://localhost:3000',
+    process.env.APP_URL || 'http://localhost:3001','https://milepay-drab.vercel.app',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -81,6 +80,7 @@ app.get('/docs.json', (_req, res) => {
 });
 
 app.get('/docs', (_req, res) => {
+  const apiUrl = process.env.API_URL || 'http://localhost:3000';
   res.setHeader('Content-Type', 'text/html');
   res.send(`
     <!DOCTYPE html>
@@ -89,7 +89,7 @@ app.get('/docs', (_req, res) => {
         <title>MilePay API Docs</title>
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" >
+        <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css">
         <style>
           .topbar { background-color: #0D3B2B !important; }
           .topbar-wrapper img { display: none; }
@@ -98,19 +98,20 @@ app.get('/docs', (_req, res) => {
       </head>
       <body>
         <div id="swagger-ui"></div>
-        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"> </script>
-        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"> </script>
+        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>
         <script>
           window.onload = function() {
             SwaggerUIBundle({
-              url: "/docs.json",
+              url: "${apiUrl}/docs.json",
               dom_id: '#swagger-ui',
               presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
               layout: "StandaloneLayout",
               persistAuthorization: true,
               displayRequestDuration: true,
               docExpansion: 'none',
-              filter: true
+              filter: true,
+              servers: [{ url: "${apiUrl}/v1" }]
             })
           }
         </script>
@@ -133,8 +134,8 @@ const bootstrap = async (): Promise<void> => {
   startCronJobs();
 
   app.listen(PORT, () => {
-    console.log(`\n🚀 MilePay API running on http://localhost:${PORT}`);
-    console.log(`📚 Swagger docs at http://localhost:${PORT}/docs`);
+    console.log(`\n🚀 MilePay API running on http://https://milepay-drab.vercel.app);
+    console.log(`📚 Swagger docs at http://https://milepay-drab.vercel.app//docs`);
     console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}\n`);
   });
 };
