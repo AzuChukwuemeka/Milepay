@@ -32,7 +32,8 @@ app.use(
 
 app.use(cors({
   origin: [
-    process.env.APP_URL || 'http://localhost:3001','https://milepay-drab.vercel.app',
+    process.env.APP_URL || 'http://localhost:3001',
+    'https://milepay-drab.vercel.app',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -41,7 +42,7 @@ app.use(cors({
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 200,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests, please slow down' } },
 });
@@ -56,7 +57,6 @@ app.use(globalLimiter);
 app.use('/v1/auth', authLimiter);
 
 // ─── Body Parsing ─────────────────────────────────────────────────────────────
-// Raw body for webhook signature verification
 app.use('/v1/webhooks/nomba', express.raw({ type: 'application/json' }), (req, _res, next) => {
   if (Buffer.isBuffer(req.body)) {
     req.body = JSON.parse(req.body.toString());
@@ -72,7 +72,6 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'milepay-api', timestamp: new Date().toISOString() });
 });
 
-// ─── Swagger Docs ─────────────────────────────────────────────────────────────
 // ─── Swagger Docs ─────────────────────────────────────────────────────────────
 app.get('/docs.json', (_req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -103,7 +102,7 @@ app.get('/docs', (_req, res) => {
         <script>
           window.onload = function() {
             SwaggerUIBundle({
-              url: "https://milepay-drab.vercel.app/docs.json",
+              url: "${apiUrl}/docs.json",
               dom_id: '#swagger-ui',
               presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
               layout: "StandaloneLayout",
@@ -111,7 +110,6 @@ app.get('/docs', (_req, res) => {
               displayRequestDuration: true,
               docExpansion: 'none',
               filter: true,
-              servers: [{ url: "https://milepay-drab.vercel.app" }]
             })
           }
         </script>
@@ -134,8 +132,8 @@ const bootstrap = async (): Promise<void> => {
   startCronJobs();
 
   app.listen(PORT, () => {
-    console.log(`MilePay API running on http://https://milepay-drab.vercel.app);
-    console.log(`Swagger docs at http://https://milepay-drab.vercel.app/docs`);
+    console.log(`MilePay API running on https://milepay-drab.vercel.app`);
+    console.log(`Swagger docs at https://milepay-drab.vercel.app/docs`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}\n`);
   });
 };
