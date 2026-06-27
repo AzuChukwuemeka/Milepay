@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import swaggerUi from 'swagger-ui-express';
 import dotenv from 'dotenv';
 
 import { connectDB } from './config/database';
@@ -23,9 +22,9 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com"],
-        styleSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com"],
-        imgSrc: ["'self'", "data:", "cdnjs.cloudflare.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "unpkg.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "unpkg.com"],
+        imgSrc: ["'self'", "data:", "unpkg.com"],
       },
     },
   })
@@ -75,29 +74,49 @@ app.get('/health', (_req, res) => {
 });
 
 // ─── Swagger Docs ─────────────────────────────────────────────────────────────
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customSiteTitle: 'MilePay API Docs',
-  customCss: `
-    .topbar { background-color: #0D3B2B; }
-    .topbar-wrapper img { display: none; }
-    .topbar-wrapper::after { content: "MilePay API"; color: #C98A1A; font-size: 20px; font-weight: bold; }
-  `,
-  customCssUrl: 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui.min.css',
-  customJs: [
-    'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-bundle.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.js',
-  ],
-  swaggerOptions: {
-    persistAuthorization: true,
-    displayRequestDuration: true,
-    docExpansion: 'none',
-    filter: true,
-  },
-}));
-
+// ─── Swagger Docs ─────────────────────────────────────────────────────────────
 app.get('/docs.json', (_req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
+});
+
+app.get('/docs', (_req, res) => {
+  res.setHeader('Content-Type', 'text/html');
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>MilePay API Docs</title>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" >
+        <style>
+          .topbar { background-color: #0D3B2B !important; }
+          .topbar-wrapper img { display: none; }
+          .topbar-wrapper::after { content: "MilePay API"; color: #C98A1A; font-size: 20px; font-weight: bold; margin-left: 16px; }
+        </style>
+      </head>
+      <body>
+        <div id="swagger-ui"></div>
+        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"> </script>
+        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"> </script>
+        <script>
+          window.onload = function() {
+            SwaggerUIBundle({
+              url: "/docs.json",
+              dom_id: '#swagger-ui',
+              presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+              layout: "StandaloneLayout",
+              persistAuthorization: true,
+              displayRequestDuration: true,
+              docExpansion: 'none',
+              filter: true
+            })
+          }
+        </script>
+      </body>
+    </html>
+  `);
 });
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
