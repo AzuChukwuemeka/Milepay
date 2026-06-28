@@ -147,7 +147,14 @@ Get your token from \`POST /auth/login\` or \`POST /auth/register\`.
         { name: 'Admin', description: 'Admin-only — disputes, users, transactions' },
       ],
     },
-    apis: ['./src/controllers/*.ts', './src/routes/*.ts'],
+
+    apis: [
+  `${__dirname}/../controllers/*.ts`,
+  `${__dirname}/../controllers/*.js`,
+  `${__dirname}/../routes/*.ts`,
+  `${__dirname}/../routes/*.js`,
+],
+
   };
 
   return swaggerJsdoc(options);
