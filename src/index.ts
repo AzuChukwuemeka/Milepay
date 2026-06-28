@@ -74,25 +74,24 @@ app.get('/docs', (_req, res) => {
     <div id="swagger-ui"></div>
     <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
     <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
-    <script>
-    window.onload = function() {
-      const ui = SwaggerUIBundle({
-        url: "${apiUrl}/docs.json",
-        dom_id: '#swagger-ui',
-        deepLinking: true,
-        presets: [
-          SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
-        ],
-        plugins: [
-          SwaggerUIBundle.plugins.DownloadUrl
-        ],
-        layout: "StandaloneLayout",
-        persistAuthorization: true
-      })
-      window.ui = ui
-    }
-    </script>
+
+<script>
+window.onload = function() {
+  const ui = SwaggerUIBundle({
+    url: "${apiUrl}/docs.json",
+    dom_id: '#swagger-ui',
+    deepLinking: true,
+    presets: [
+      SwaggerUIBundle.presets.apis,
+      SwaggerUIBundle.SwaggerUIStandalonePreset
+    ],
+    layout: "BaseLayout",
+    persistAuthorization: true
+  })
+  window.ui = ui
+}
+</script>
+
   </body>
 </html>`);
 });
