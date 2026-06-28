@@ -4,14 +4,14 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
+dotenv.config();
+
 import { connectDB } from './config/database';
 import { runMigrations } from './db/migrate';
-import { swaggerSpec } from './config/swagger';
+import { getSwaggerSpec } from './config/swagger';
 import routes from './routes/index';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 import { startCronJobs } from './services/cron.service';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,20 +22,15 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
-        imgSrc: ["'self'", "data:", "https://unpkg.com"],
-        connectSrc: ["'self'", "https://unpkg.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "unpkg.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "unpkg.com"],
+        imgSrc: ["'self'", "data:", "unpkg.com"],
       },
     },
   })
 );
 
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+app.use(cors());
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
@@ -70,12 +65,14 @@ app.get('/health', (_req, res) => {
 });
 
 // ─── Swagger Docs ─────────────────────────────────────────────────────────────
+// Called at request time so API_URL env is always fresh
 app.get('/docs.json', (_req, res) => {
   res.setHeader('Content-Type', 'application/json');
-  res.send(swaggerSpec);
+  res.send(getSwaggerSpec());
 });
 
 app.get('/docs', (_req, res) => {
+  const apiUrl = process.env.API_URL || `http://localhost:${PORT}`;
   res.setHeader('Content-Type', 'text/html');
   res.send(`
     <!DOCTYPE html>
@@ -88,7 +85,13 @@ app.get('/docs', (_req, res) => {
         <style>
           .topbar { background-color: #0D3B2B !important; }
           .topbar-wrapper img { display: none; }
-          .topbar-wrapper::after { content: "MilePay API"; color: #C98A1A; font-size: 20px; font-weight: bold; margin-left: 16px; }
+          .topbar-wrapper::after {
+            content: "MilePay API";
+            color: #C98A1A;
+            font-size: 20px;
+            font-weight: bold;
+            margin-left: 16px;
+          }
         </style>
       </head>
       <body>
@@ -98,14 +101,17 @@ app.get('/docs', (_req, res) => {
         <script>
           window.onload = function() {
             SwaggerUIBundle({
-              spec: ${JSON.stringify(swaggerSpec)},
+              url: "${apiUrl}/docs.json",
               dom_id: '#swagger-ui',
-              presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+              presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIStandalonePreset
+              ],
               layout: "StandaloneLayout",
               persistAuthorization: true,
               displayRequestDuration: true,
               docExpansion: 'none',
-              filter: true,
+              filter: true
             })
           }
         </script>
@@ -128,9 +134,9 @@ const bootstrap = async (): Promise<void> => {
   startCronJobs();
 
   app.listen(PORT, () => {
-    console.log(`MilePay API running on https://milepay-psi.vercel.app`);
-    console.log(`Swagger docs at https://milepay-psi.vercel.app/docs`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}\n`);
+    console.log(`\n🚀 MilePay API running on http://localhost:${PORT}`);
+    console.log(`📚 Swagger docs at http://localhost:${PORT}/docs`);
+    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}\n`);
   });
 };
 
