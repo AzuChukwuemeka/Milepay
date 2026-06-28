@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,21 +17,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
-
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests, please slow down' } },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many auth attempts' } },
-});
-
-app.use(globalLimiter);
-app.use('/v1/auth', authLimiter);
 
 app.use('/v1/webhooks/nomba', express.raw({ type: 'application/json' }), (req, _res, next) => {
   if (Buffer.isBuffer(req.body)) {
@@ -59,39 +43,35 @@ app.get('/docs', (_req, res) => {
   res.setHeader('Content-Type', 'text/html');
   res.send(`<!DOCTYPE html>
 <html>
-<head>
-  <title>MilePay API</title>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css">
-  <style>
-    .swagger-ui .opblock-body { display: block !important; }
-    .swagger-ui .opblock.is-open .opblock-body { display: block !important; }
-    .swagger-ui .opblock-content { display: block !important; }
-  </style>
+  <head>
+    <title>MilePay API</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css">
   </head>
-   <body>
+  <body>
     <div id="swagger-ui"></div>
     <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
     <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
-
-<script>
-window.onload = function() {
-  const ui = SwaggerUIBundle({
-    url: "${apiUrl}/docs.json",
-    dom_id: '#swagger-ui',
-    deepLinking: true,
-    presets: [
-      SwaggerUIBundle.presets.apis,
-      SwaggerUIBundle.SwaggerUIStandalonePreset
-    ],
-    layout: "BaseLayout",
-    persistAuthorization: true
-  })
-  window.ui = ui
-}
-</script>
-
+    <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "${apiUrl}/docs.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        persistAuthorization: true
+      })
+      window.ui = ui
+    }
+    </script>
   </body>
 </html>`);
 });
