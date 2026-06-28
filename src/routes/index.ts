@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireRole, requireEmailVerified } from '../middleware/auth.middleware';
+import { authService } from '../services/auth.service';
 
 // Controllers
 import * as auth from '../controllers/auth.controller';
@@ -7,6 +8,42 @@ import * as project from '../controllers/project.controller';
 import * as misc from '../controllers/misc.controller';
 
 const router = Router();
+
+// ─── Email Verification (browser link) ───────────────────────────────────────
+router.get('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      res.status(400).send(`
+        <html>
+          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2>❌ Invalid Link</h2>
+            <p>This verification link is invalid.</p>
+          </body>
+        </html>
+      `);
+      return;
+    }
+    await authService.verifyEmail(token as string);
+    res.send(`
+      <html>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+          <h2>✅ Email Verified Successfully</h2>
+          <p>Your MilePay account is now active. You can close this tab.</p>
+        </body>
+      </html>
+    `);
+  } catch {
+    res.status(400).send(`
+      <html>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+          <h2>❌ Verification Failed</h2>
+          <p>This link is invalid or has expired.</p>
+        </body>
+      </html>
+    `);
+  }
+});
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 router.post('/auth/register', auth.register);

@@ -39,7 +39,7 @@ export class AuthService {
       html: `
         <h2>Welcome to MilePay, ${data.name}!</h2>
         <p>Click the link below to verify your email address:</p>
-        <a href="${process.env.APP_URL}/verify-email?token=${verifyToken}">Verify Email</a>
+        <a href=`${process.env.APP_URL}/v1/verify-email?token=${verifyToken}`>Verify Email</a>
         <p>This link expires in 24 hours.</p>
       `,
     });
@@ -105,7 +105,7 @@ export class AuthService {
       html: `
         <h2>Password Reset</h2>
         <p>Click the link below to reset your password:</p>
-        <a href="${process.env.APP_URL}/reset-password?token=${resetToken}">Reset Password</a>
+        <a href="${process.env.APP_URL}/v1/verify-email?token=${verifyToken}">Verify Email</a>
         <p>This link expires in 1 hour.</p>
       `,
     });
