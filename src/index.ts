@@ -16,23 +16,9 @@ import { startCronJobs } from './services/cron.service';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── Security Middleware ──────────────────────────────────────────────────────
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "unpkg.com"],
-        styleSrc: ["'self'", "'unsafe-inline'", "unpkg.com"],
-        imgSrc: ["'self'", "data:", "unpkg.com"],
-      },
-    },
-  })
-);
-
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 
-// ─── Rate Limiting ────────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -48,7 +34,6 @@ const authLimiter = rateLimit({
 app.use(globalLimiter);
 app.use('/v1/auth', authLimiter);
 
-// ─── Body Parsing ─────────────────────────────────────────────────────────────
 app.use('/v1/webhooks/nomba', express.raw({ type: 'application/json' }), (req, _res, next) => {
   if (Buffer.isBuffer(req.body)) {
     req.body = JSON.parse(req.body.toString());
@@ -59,75 +44,59 @@ app.use('/v1/webhooks/nomba', express.raw({ type: 'application/json' }), (req, _
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'milepay-api', timestamp: new Date().toISOString() });
 });
 
-// ─── Swagger Docs ─────────────────────────────────────────────────────────────
-// Called at request time so API_URL env is always fresh
 app.get('/docs.json', (_req, res) => {
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.send(getSwaggerSpec());
 });
 
 app.get('/docs', (_req, res) => {
   const apiUrl = process.env.API_URL || `http://localhost:${PORT}`;
   res.setHeader('Content-Type', 'text/html');
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>MilePay API Docs</title>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css">
-        <style>
-          .topbar { background-color: #0D3B2B !important; }
-          .topbar-wrapper img { display: none; }
-          .topbar-wrapper::after {
-            content: "MilePay API";
-            color: #C98A1A;
-            font-size: 20px;
-            font-weight: bold;
-            margin-left: 16px;
-          }
-        </style>
-      </head>
-      <body>
-        <div id="swagger-ui"></div>
-        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
-        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>
-        <script>
-          window.onload = function() {
-            SwaggerUIBundle({
-              url: "${apiUrl}/docs.json",
-              dom_id: '#swagger-ui',
-              presets: [
-                SwaggerUIBundle.presets.apis,
-                SwaggerUIStandalonePreset
-              ],
-              layout: "StandaloneLayout",
-              persistAuthorization: true,
-              displayRequestDuration: true,
-              docExpansion: 'none',
-              filter: true
-            })
-          }
-        </script>
-      </body>
-    </html>
-  `);
+  res.send(`<!DOCTYPE html>
+<html>
+  <head>
+    <title>MilePay API</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css">
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
+    <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "${apiUrl}/docs.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        persistAuthorization: true
+      })
+      window.ui = ui
+    }
+    </script>
+  </body>
+</html>`);
 });
 
-// ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/v1', routes);
 
-// ─── Error Handling ───────────────────────────────────────────────────────────
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// ─── Bootstrap ────────────────────────────────────────────────────────────────
 const bootstrap = async (): Promise<void> => {
   await connectDB();
   await runMigrations();
