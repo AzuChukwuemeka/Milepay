@@ -13,7 +13,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(data.password, 12);
     const verifyToken = crypto.randomBytes(32).toString('hex');
-    const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const user = await userRepository.create({
       email: data.email,
@@ -25,7 +25,6 @@ export class AuthService {
       emailVerifyExpires: verifyExpires,
     });
 
-    // Create empty profile record
     const { pool } = await import('../config/database');
     if (data.role === 'provider') {
       await pool.query(`INSERT INTO provider_profiles (user_id) VALUES ($1)`, [user.id]);
@@ -39,7 +38,7 @@ export class AuthService {
       html: `
         <h2>Welcome to MilePay, ${data.name}!</h2>
         <p>Click the link below to verify your email address:</p>
-        <a href=`${process.env.APP_URL}/v1/verify-email?token=${verifyToken}`>Verify Email</a>
+        <a href="${process.env.APP_URL}/v1/verify-email?token=${verifyToken}">Verify Email</a>
         <p>This link expires in 24 hours.</p>
       `,
     });
@@ -92,10 +91,10 @@ export class AuthService {
 
   async forgotPassword(email: string): Promise<void> {
     const user = await userRepository.findByEmail(email);
-    if (!user) return; // Don't reveal whether email exists
+    if (!user) return;
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
 
     await userRepository.setPasswordResetToken(user.id, resetToken, resetExpires);
 
@@ -105,7 +104,7 @@ export class AuthService {
       html: `
         <h2>Password Reset</h2>
         <p>Click the link below to reset your password:</p>
-        <a href="${process.env.APP_URL}/v1/verify-email?token=${verifyToken}">Verify Email</a>
+        <a href="${process.env.APP_URL}/v1/reset-password?token=${resetToken}">Reset Password</a>
         <p>This link expires in 1 hour.</p>
       `,
     });
