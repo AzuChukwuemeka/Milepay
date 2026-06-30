@@ -2,12 +2,42 @@ import { Request, Response, NextFunction } from 'express';
 import { webhookService } from '../services/webhook.service';
 import { resolveBankAccount } from '../services/nomba.service';
 import { notificationRepository, disputeRepository, paymentRepository } from '../repositories/shared.repository';
-import { projectRepository } from '../repositories/project.repository';
 import { userRepository } from '../repositories/user.repository';
 import { milestoneService } from '../services/milestone.service';
-import { initiateTransfer } from '../services/nomba.service';
+import { uploadToCloudinary } from '../services/cloudinary.service';
 import { sendSuccess, sendError } from '../utils/response';
 import pool from '../config/database';
+
+// ─── Nigerian Banks Lookup ────────────────────────────────────────────────────
+const NIGERIAN_BANKS: Record<string, string> = {
+  '044': 'Access Bank',
+  '023': 'Citibank',
+  '063': 'Diamond Bank',
+  '050': 'EcoBank',
+  '070': 'Fidelity Bank',
+  '011': 'First Bank',
+  '214': 'First City Monument Bank',
+  '058': 'Guaranty Trust Bank',
+  '030': 'Heritage Bank',
+  '301': 'Jaiz Bank',
+  '082': 'Keystone Bank',
+  '526': 'Moniepoint',
+  '014': 'MainStreet Bank',
+  '076': 'Polaris Bank',
+  '101': 'Providus Bank',
+  '221': 'Stanbic IBTC',
+  '068': 'Standard Chartered',
+  '232': 'Sterling Bank',
+  '100': 'Suntrust Bank',
+  '032': 'Union Bank',
+  '033': 'United Bank for Africa',
+  '215': 'Unity Bank',
+  '035': 'Wema Bank',
+  '057': 'Zenith Bank',
+  '120001': 'Opay',
+  '120002': 'PalmPay',
+  '090405': 'Nomba',
+};
 
 // ─── Webhook Controller ───────────────────────────────────────────────────────
 
@@ -32,10 +62,7 @@ export const nombaWebhook = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    // Always respond 200 fast — process async
     res.status(200).json({ success: true, message: 'Webhook received' });
-
-    // Process after response
     await webhookService.handleInboundPayment(req.body);
   } catch (err) {
     console.error('Webhook processing error:', err);
@@ -55,7 +82,7 @@ export const nombaWebhook = async (req: Request, res: Response, next: NextFuncti
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required: [displayName, categories, bio, city, state]
@@ -63,9 +90,8 @@ export const nombaWebhook = async (req: Request, res: Response, next: NextFuncti
  *               displayName:
  *                 type: string
  *               categories:
- *                 type: array
- *                 items:
- *                   type: string
+ *                 type: string
+ *                 description: Comma-separated list e.g. "Development,Design"
  *               bio:
  *                 type: string
  *                 minLength: 80
@@ -76,6 +102,14 @@ export const nombaWebhook = async (req: Request, res: Response, next: NextFuncti
  *                 type: string
  *               state:
  *                 type: string
+ *               profilePhoto:
+ *                 type: string
+ *                 format: binary
+ *                 description: Profile photo (JPG/PNG, max 2MB)
+ *               portfolioFile:
+ *                 type: string
+ *                 format: binary
+ *                 description: Portfolio PDF or image (max 10MB)
  *     responses:
  *       200:
  *         description: Profile saved
@@ -83,15 +117,45 @@ export const nombaWebhook = async (req: Request, res: Response, next: NextFuncti
 export const providerProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { displayName, categories, bio, portfolioUrl, city, state } = req.body;
-    if (!displayName || !categories?.length || !bio || !city || !state) {
+
+    if (!displayName || !categories || !bio || !city || !state) {
       sendError(res, 400, 'VALIDATION_ERROR', 'All required fields must be provided');
       return;
     }
+
+    const categoryArray = Array.isArray(categories)
+      ? categories
+      : categories.split(',').map((c: string) => c.trim());
+
+    let profilePhotoUrl: string | null = null;
+    let portfolioFileUrl: string | null = null;
+
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+    if (files?.profilePhoto?.[0]) {
+      profilePhotoUrl = await uploadToCloudinary(
+        files.profilePhoto[0].buffer,
+        'profile-photos',
+        `${req.user!.userId}-profile`
+      );
+    }
+
+    if (files?.portfolioFile?.[0]) {
+      portfolioFileUrl = await uploadToCloudinary(
+        files.portfolioFile[0].buffer,
+        'portfolios',
+        `${req.user!.userId}-portfolio`
+      );
+    }
+
     await pool.query(
-      `UPDATE provider_profiles SET display_name=$1, categories=$2, bio=$3, portfolio_url=$4, city=$5, state=$6, onboarding_step=1
-       WHERE user_id=$7`,
-      [displayName, categories, bio, portfolioUrl ?? null, city, state, req.user!.userId]
+      `UPDATE provider_profiles
+       SET display_name=$1, categories=$2, bio=$3, portfolio_url=$4,
+           profile_photo_url=$5, portfolio_file_url=$6, city=$7, state=$8, onboarding_step=1
+       WHERE user_id=$9`,
+      [displayName, categoryArray, bio, portfolioUrl ?? null, profilePhotoUrl, portfolioFileUrl, city, state, req.user!.userId]
     );
+
     sendSuccess(res, { step: 1 }, 'Profile saved');
   } catch (err) { next(err); }
 };
@@ -101,13 +165,13 @@ export const providerProfile = async (req: Request, res: Response, next: NextFun
  * /onboarding/provider/identity:
  *   post:
  *     tags: [Onboarding]
- *     summary: Step 2 — Provider identity verification
+ *     summary: Step 2 — Provider identity verification (upload ID documents)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required: [idType, idNumber]
@@ -117,28 +181,74 @@ export const providerProfile = async (req: Request, res: Response, next: NextFun
  *                 enum: [NIN, voters_card, passport, drivers_licence]
  *               idNumber:
  *                 type: string
- *               idFrontUrl:
+ *               idFront:
  *                 type: string
- *               idBackUrl:
+ *                 format: binary
+ *                 description: Front of ID document (JPG/PNG/PDF, max 5MB)
+ *               idBack:
  *                 type: string
- *               selfieUrl:
+ *                 format: binary
+ *                 description: Back of ID document (optional for passport)
+ *               selfie:
  *                 type: string
+ *                 format: binary
+ *                 description: Selfie holding ID (optional)
  *     responses:
  *       200:
- *         description: Identity documents saved for review
+ *         description: Identity documents uploaded and submitted for review
  */
 export const providerIdentity = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { idType, idNumber, idFrontUrl, idBackUrl, selfieUrl } = req.body;
+    const { idType, idNumber } = req.body;
+
     if (!idType || !idNumber) {
       sendError(res, 400, 'VALIDATION_ERROR', 'ID type and number are required');
       return;
     }
+
+    const validIdTypes = ['NIN', 'voters_card', 'passport', 'drivers_licence'];
+    if (!validIdTypes.includes(idType)) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Invalid ID type. Must be NIN, voters_card, passport or drivers_licence', 'idType');
+      return;
+    }
+
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+    let idFrontUrl: string | null = null;
+    let idBackUrl: string | null = null;
+    let selfieUrl: string | null = null;
+
+    if (files?.idFront?.[0]) {
+      idFrontUrl = await uploadToCloudinary(
+        files.idFront[0].buffer,
+        'identity',
+        `${req.user!.userId}-id-front`
+      );
+    }
+
+    if (files?.idBack?.[0]) {
+      idBackUrl = await uploadToCloudinary(
+        files.idBack[0].buffer,
+        'identity',
+        `${req.user!.userId}-id-back`
+      );
+    }
+
+    if (files?.selfie?.[0]) {
+      selfieUrl = await uploadToCloudinary(
+        files.selfie[0].buffer,
+        'identity',
+        `${req.user!.userId}-selfie`
+      );
+    }
+
     await pool.query(
-      `UPDATE provider_profiles SET id_type=$1, id_number=$2, id_front_url=$3, id_back_url=$4, selfie_url=$5, onboarding_step=2
+      `UPDATE provider_profiles
+       SET id_type=$1, id_number=$2, id_front_url=$3, id_back_url=$4, selfie_url=$5, onboarding_step=2
        WHERE user_id=$6`,
-      [idType, idNumber, idFrontUrl ?? null, idBackUrl ?? null, selfieUrl ?? null, req.user!.userId]
+      [idType, idNumber, idFrontUrl, idBackUrl, selfieUrl, req.user!.userId]
     );
+
     sendSuccess(res, { step: 2 }, 'Identity documents submitted for review');
   } catch (err) { next(err); }
 };
@@ -161,11 +271,26 @@ export const providerIdentity = async (req: Request, res: Response, next: NextFu
  *             properties:
  *               bankCode:
  *                 type: string
+ *                 example: "044"
  *               accountNumber:
  *                 type: string
+ *                 example: "0123456789"
  *     responses:
  *       200:
- *         description: Returns resolved account name for confirmation
+ *         description: Returns resolved account name for provider to confirm
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accountName:
+ *                   type: string
+ *                 accountNumber:
+ *                   type: string
+ *                 bankCode:
+ *                   type: string
+ *                 bankName:
+ *                   type: string
  */
 export const providerBank = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -175,7 +300,8 @@ export const providerBank = async (req: Request, res: Response, next: NextFuncti
       return;
     }
     const resolved = await resolveBankAccount({ bankCode, accountNumber });
-    sendSuccess(res, { accountName: resolved.accountName, accountNumber, bankCode }, 'Account resolved');
+    const bankName = NIGERIAN_BANKS[bankCode] ?? bankCode;
+    sendSuccess(res, { accountName: resolved.accountName, accountNumber, bankCode, bankName }, 'Account resolved');
   } catch (err) { next(err); }
 };
 
@@ -184,7 +310,7 @@ export const providerBank = async (req: Request, res: Response, next: NextFuncti
  * /onboarding/provider/confirm:
  *   post:
  *     tags: [Onboarding]
- *     summary: Step 4 — Confirm bank and accept terms
+ *     summary: Step 4 — Confirm bank details and accept terms to activate account
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -204,23 +330,47 @@ export const providerBank = async (req: Request, res: Response, next: NextFuncti
  *               agreedToTerms:
  *                 type: boolean
  *                 enum: [true]
+ *                 description: Must be true to activate account
  *     responses:
  *       200:
- *         description: Provider account activated
+ *         description: Provider account activated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 onboardingComplete:
+ *                   type: boolean
+ *                   example: true
  */
 export const providerConfirm = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { bankCode, accountNumber, accountName, agreedToTerms } = req.body;
-    if (!agreedToTerms) { sendError(res, 400, 'VALIDATION_ERROR', 'You must accept the terms', 'agreedToTerms'); return; }
-    const bankResult = await pool.query('SELECT bank_name FROM banks WHERE code = $1', [bankCode]);
-    const bankName = bankResult.rows[0]?.bank_name ?? bankCode;
+
+    if (!agreedToTerms) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'You must accept the terms to activate your account', 'agreedToTerms');
+      return;
+    }
+
+    if (!bankCode || !accountNumber || !accountName) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Bank code, account number and account name are required');
+      return;
+    }
+
+    // Use inline lookup — no DB query needed
+    const bankName = NIGERIAN_BANKS[bankCode] ?? bankCode;
+
     await pool.query(
-      `UPDATE provider_profiles SET bank_code=$1, bank_name=$2, account_number=$3, account_name=$4, terms_accepted=TRUE, terms_accepted_at=NOW(), onboarding_step=4
+      `UPDATE provider_profiles
+       SET bank_code=$1, bank_name=$2, account_number=$3, account_name=$4,
+           terms_accepted=TRUE, terms_accepted_at=NOW(), onboarding_step=4
        WHERE user_id=$5`,
       [bankCode, bankName, accountNumber, accountName, req.user!.userId]
     );
+
     await userRepository.markOnboardingComplete(req.user!.userId);
-    sendSuccess(res, { onboardingComplete: true }, 'Provider account activated');
+
+    sendSuccess(res, { onboardingComplete: true }, 'Provider account activated successfully');
   } catch (err) { next(err); }
 };
 
@@ -274,7 +424,7 @@ export const clientProfile = async (req: Request, res: Response, next: NextFunct
  * /onboarding/client/confirm:
  *   post:
  *     tags: [Onboarding]
- *     summary: Step 2 — Client accepts terms
+ *     summary: Step 2 — Client accepts terms to activate account
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -295,7 +445,10 @@ export const clientProfile = async (req: Request, res: Response, next: NextFunct
 export const clientConfirm = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { agreedToTerms } = req.body;
-    if (!agreedToTerms) { sendError(res, 400, 'VALIDATION_ERROR', 'You must accept the terms'); return; }
+    if (!agreedToTerms) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'You must accept the terms');
+      return;
+    }
     await pool.query(
       `UPDATE client_profiles SET terms_accepted=TRUE, terms_accepted_at=NOW(), onboarding_step=2 WHERE user_id=$1`,
       [req.user!.userId]
@@ -317,37 +470,118 @@ export const clientConfirm = async (req: Request, res: Response, next: NextFunct
  */
 export const getBanks = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Nigerian banks list — in production, cache this or seed from Nomba
-    const NIGERIAN_BANKS = [
-      { code: '044', name: 'Access Bank' },
-      { code: '023', name: 'Citibank' },
-      { code: '063', name: 'Diamond Bank' },
-      { code: '050', name: 'EcoBank' },
-      { code: '070', name: 'Fidelity Bank' },
-      { code: '011', name: 'First Bank' },
-      { code: '214', name: 'First City Monument Bank' },
-      { code: '058', name: 'Guaranty Trust Bank' },
-      { code: '030', name: 'Heritage Bank' },
-      { code: '301', name: 'Jaiz Bank' },
-      { code: '082', name: 'Keystone Bank' },
-      { code: '526', name: 'Moniepoint' },
-      { code: '014', name: 'MainStreet Bank' },
-      { code: '076', name: 'Polaris Bank' },
-      { code: '101', name: 'Providus Bank' },
-      { code: '221', name: 'Stanbic IBTC' },
-      { code: '068', name: 'Standard Chartered' },
-      { code: '232', name: 'Sterling Bank' },
-      { code: '100', name: 'Suntrust Bank' },
-      { code: '032', name: 'Union Bank' },
-      { code: '033', name: 'United Bank for Africa' },
-      { code: '215', name: 'Unity Bank' },
-      { code: '035', name: 'Wema Bank' },
-      { code: '057', name: 'Zenith Bank' },
-      { code: '120001', name: 'Opay' },
-      { code: '120002', name: 'PalmPay' },
-      { code: '090405', name: 'Nomba' },
-    ];
-    sendSuccess(res, NIGERIAN_BANKS);
+    const banks = Object.entries(NIGERIAN_BANKS).map(([code, name]) => ({ code, name }));
+    sendSuccess(res, banks);
+  } catch (err) { next(err); }
+};
+
+// ─── Provider Public Profile ──────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /providers/{username}:
+ *   get:
+ *     tags: [Providers]
+ *     summary: Get public provider profile with trust score and completion rate
+ *     parameters:
+ *       - in: path
+ *         name: username
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Public provider profile
+ *       404:
+ *         description: Provider not found
+ */
+export const getProviderProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { username } = req.params;
+
+    const result = await pool.query(
+      `SELECT
+        u.id, u.name, u.created_at,
+        pp.display_name, pp.categories, pp.bio, pp.portfolio_url,
+        pp.profile_photo_url, pp.city, pp.state, pp.is_id_verified,
+        pp.trust_score, pp.completed_projects
+       FROM users u
+       JOIN provider_profiles pp ON pp.user_id = u.id
+       WHERE u.role = 'provider'
+         AND (LOWER(pp.display_name) = LOWER($1) OR u.id::text = $1)`,
+      [username]
+    );
+
+    if (!result.rows[0]) {
+      sendError(res, 404, 'NOT_FOUND', 'Provider not found');
+      return;
+    }
+
+    sendSuccess(res, result.rows[0]);
+  } catch (err) { next(err); }
+};
+
+// ─── Provider Earnings ────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /earnings:
+ *   get:
+ *     tags: [Providers]
+ *     summary: Get provider earnings — paid milestones, pending amounts, bank details
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Provider earnings summary
+ */
+export const getProviderEarnings = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+
+    // Total paid out
+    const paidResult = await pool.query(
+      `SELECT COALESCE(SUM(m.amount * 0.98), 0) AS total_earned
+       FROM milestones m
+       JOIN projects p ON p.id = m.project_id
+       WHERE p.provider_id = $1 AND m.state = 'PAID'`,
+      [userId]
+    );
+
+    // Pending (approved but not yet transferred)
+    const pendingResult = await pool.query(
+      `SELECT COALESCE(SUM(m.amount * 0.98), 0) AS total_pending
+       FROM milestones m
+       JOIN projects p ON p.id = m.project_id
+       WHERE p.provider_id = $1 AND m.state = 'APPROVED_PENDING_TRANSFER'`,
+      [userId]
+    );
+
+    // Recent paid milestones
+    const recentResult = await pool.query(
+      `SELECT m.id, m.title, m.amount, m.amount * 0.98 AS amount_received,
+              m.paid_at, m.nomba_transfer_ref, p.title AS project_title
+       FROM milestones m
+       JOIN projects p ON p.id = m.project_id
+       WHERE p.provider_id = $1 AND m.state = 'PAID'
+       ORDER BY m.paid_at DESC
+       LIMIT 20`,
+      [userId]
+    );
+
+    // Bank details
+    const bankResult = await pool.query(
+      `SELECT bank_name, account_number, account_name FROM provider_profiles WHERE user_id = $1`,
+      [userId]
+    );
+
+    sendSuccess(res, {
+      totalEarned: Number(paidResult.rows[0].total_earned),
+      totalPending: Number(pendingResult.rows[0].total_pending),
+      recentPayments: recentResult.rows,
+      bankDetails: bankResult.rows[0] ?? null,
+      platformFee: '2%',
+    });
   } catch (err) { next(err); }
 };
 
@@ -475,11 +709,8 @@ export const adminResolveDispute = async (req: Request, res: Response, next: Nex
     });
 
     if (outcome === 'release') {
-      // Fire transfer to provider
       await milestoneService.executeTransfer(dispute.project_id, dispute.milestone_id);
     }
-    // If refund — admin manually initiates via Nomba dashboard for MVP
-    // TODO: implement automated refund transfer in Phase 2
 
     sendSuccess(res, { outcome: finalOutcome }, 'Dispute resolved');
   } catch (err) { next(err); }
@@ -593,9 +824,15 @@ export const adminGetUsers = async (req: Request, res: Response, next: NextFunct
  * /admin/users/{id}/verify:
  *   post:
  *     tags: [Admin]
- *     summary: Mark provider ID as verified
+ *     summary: Mark provider ID as verified — unlocks verified badge
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Provider verified badge unlocked
@@ -603,12 +840,7 @@ export const adminGetUsers = async (req: Request, res: Response, next: NextFunct
 export const adminVerifyUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     await pool.query(
-      `UPDATE provider_profiles SET is_id_verified = TRUE WHERE user_id = $1`,
-      [req.params.id]
-    );
-    // Add trust score for verification
-    await pool.query(
-      `UPDATE provider_profiles SET trust_score = trust_score + 15 WHERE user_id = $1`,
+      `UPDATE provider_profiles SET is_id_verified = TRUE, trust_score = trust_score + 15 WHERE user_id = $1`,
       [req.params.id]
     );
     sendSuccess(res, { verified: true }, 'Provider verified');

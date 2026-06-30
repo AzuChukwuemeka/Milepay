@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireRole, requireEmailVerified } from '../middleware/auth.middleware';
 import { authService } from '../services/auth.service';
+import { upload } from '../middleware/upload.middleware';
 
 // Controllers
 import * as auth from '../controllers/auth.controller';
@@ -45,6 +46,59 @@ router.get('/verify-email', async (req, res) => {
   }
 });
 
+// ─── Password Reset (browser link) ───────────────────────────────────────────
+router.get('/reset-password', (req, res) => {
+  const { token } = req.query;
+  res.setHeader('Content-Type', 'text/html');
+  res.send(`
+    <html>
+      <head>
+        <title>Reset Password — MilePay</title>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: sans-serif; max-width: 400px; margin: 80px auto; padding: 20px; }
+          h2 { color: #0D3B2B; }
+          input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+          button { width: 100%; padding: 12px; background: #0D3B2B; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+          .msg { padding: 10px; border-radius: 4px; margin-top: 12px; }
+          .success { background: #d4edda; color: #155724; }
+          .error { background: #f8d7da; color: #721c24; }
+        </style>
+      </head>
+      <body>
+        <h2>Reset your password</h2>
+        <input type="password" id="password" placeholder="New password (min 8 characters)"/>
+        <input type="password" id="confirm" placeholder="Confirm new password"/>
+        <button onclick="reset()">Reset Password</button>
+        <div id="msg"></div>
+        <script>
+          async function reset() {
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('confirm').value;
+            const msg = document.getElementById('msg');
+            if (password.length < 8) { msg.className='msg error'; msg.innerText='Password must be at least 8 characters'; return; }
+            if (password !== confirm) { msg.className='msg error'; msg.innerText='Passwords do not match'; return; }
+            const res = await fetch('/v1/auth/reset-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: '${token}', newPassword: password })
+            });
+            const data = await res.json();
+            if (data.success) {
+              msg.className='msg success';
+              msg.innerText='Password reset successfully. You can now log in.';
+            } else {
+              msg.className='msg error';
+              msg.innerText=data.error?.message || 'Something went wrong';
+            }
+          }
+        </script>
+      </body>
+    </html>
+  `);
+});
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 router.post('/auth/register', auth.register);
 router.post('/auth/login', auth.login);
@@ -54,13 +108,36 @@ router.post('/auth/reset-password', auth.resetPassword);
 router.get('/auth/me', authenticate, auth.getMe);
 
 // ─── Onboarding ───────────────────────────────────────────────────────────────
-router.post('/onboarding/provider/profile', authenticate, requireRole('provider'), misc.providerProfile);
-router.post('/onboarding/provider/identity', authenticate, requireRole('provider'), misc.providerIdentity);
+router.post(
+  '/onboarding/provider/profile',
+  authenticate,
+  requireRole('provider'),
+  upload.fields([
+    { name: 'profilePhoto', maxCount: 1 },
+    { name: 'portfolioFile', maxCount: 1 },
+  ]),
+  misc.providerProfile
+);
+router.post(
+  '/onboarding/provider/identity',
+  authenticate,
+  requireRole('provider'),
+  upload.fields([
+    { name: 'idFront', maxCount: 1 },
+    { name: 'idBack', maxCount: 1 },
+    { name: 'selfie', maxCount: 1 },
+  ]),
+  misc.providerIdentity
+);
 router.post('/onboarding/provider/bank', authenticate, requireRole('provider'), misc.providerBank);
 router.post('/onboarding/provider/confirm', authenticate, requireRole('provider'), misc.providerConfirm);
 router.post('/onboarding/client/profile', authenticate, requireRole('client'), misc.clientProfile);
 router.post('/onboarding/client/confirm', authenticate, requireRole('client'), misc.clientConfirm);
 router.get('/banks', misc.getBanks);
+
+// ─── Provider Public Profile & Earnings ───────────────────────────────────────
+router.get('/providers/:username', misc.getProviderProfile);
+router.get('/earnings', authenticate, requireRole('provider'), misc.getProviderEarnings);
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 router.get('/projects', authenticate, project.listProjects);

@@ -13,7 +13,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(data.password, 12);
     const verifyToken = crypto.randomBytes(32).toString('hex');
-    const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await userRepository.create({
       email: data.email,
@@ -25,6 +25,7 @@ export class AuthService {
       emailVerifyExpires: verifyExpires,
     });
 
+    // Create empty profile record
     const { pool } = await import('../config/database');
     if (data.role === 'provider') {
       await pool.query(`INSERT INTO provider_profiles (user_id) VALUES ($1)`, [user.id]);
@@ -91,10 +92,10 @@ export class AuthService {
 
   async forgotPassword(email: string): Promise<void> {
     const user = await userRepository.findByEmail(email);
-    if (!user) return;
+    if (!user) return; // Don't reveal whether email exists
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await userRepository.setPasswordResetToken(user.id, resetToken, resetExpires);
 

@@ -15,9 +15,11 @@ import { startCronJobs } from './services/cron.service';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ─── Security Middleware ──────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 
+// ─── Body Parsing ─────────────────────────────────────────────────────────────
 app.use('/v1/webhooks/nomba', express.raw({ type: 'application/json' }), (req, _res, next) => {
   if (Buffer.isBuffer(req.body)) {
     req.body = JSON.parse(req.body.toString());
@@ -28,10 +30,12 @@ app.use('/v1/webhooks/nomba', express.raw({ type: 'application/json' }), (req, _
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'milepay-api', timestamp: new Date().toISOString() });
 });
 
+// ─── Swagger Docs ─────────────────────────────────────────────────────────────
 app.get('/docs.json', (_req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -76,11 +80,14 @@ app.get('/docs', (_req, res) => {
 </html>`);
 });
 
+// ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/v1', routes);
 
+// ─── Error Handling ───────────────────────────────────────────────────────────
 app.use(notFoundHandler);
 app.use(errorHandler);
 
+// ─── Bootstrap ────────────────────────────────────────────────────────────────
 const bootstrap = async (): Promise<void> => {
   await connectDB();
   await runMigrations();
