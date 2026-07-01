@@ -53,8 +53,8 @@ export const providerDashboard = async (req: Request, res: Response, next: NextF
 
     const statsResult = await pool.query(
       `SELECT
-        COUNT(CASE WHEN p.state = 'ACTIVE' THEN 1 END) AS active_projects,
-        COUNT(CASE WHEN p.state = 'COMPLETED' THEN 1 END) AS completed_projects,
+        COUNT(DISTINCT CASE WHEN p.state = 'ACTIVE' THEN p.id END) AS active_projects,
+        COUNT(DISTINCT CASE WHEN p.state = 'COMPLETED' THEN p.id END) AS completed_projects,
         COALESCE(SUM(CASE WHEN m.state = 'PAID' THEN m.amount * 0.98 ELSE 0 END), 0) AS total_earned,
         COALESCE(SUM(CASE WHEN m.state = 'APPROVED_PENDING_TRANSFER' THEN m.amount * 0.98 ELSE 0 END), 0) AS pending_payout
        FROM projects p
@@ -192,9 +192,9 @@ export const clientDashboard = async (req: Request, res: Response, next: NextFun
 
     const statsResult = await pool.query(
       `SELECT
-        COUNT(CASE WHEN p.state = 'ACTIVE' THEN 1 END) AS active_projects,
-        COUNT(CASE WHEN p.state = 'COMPLETED' THEN 1 END) AS completed_projects,
-        COALESCE(SUM(CASE WHEN p.state = 'COMPLETED' THEN p.total_amount ELSE 0 END), 0) AS total_spent,
+        COUNT(DISTINCT CASE WHEN p.state = 'ACTIVE' THEN p.id END) AS active_projects,
+        COUNT(DISTINCT CASE WHEN p.state = 'COMPLETED' THEN p.id END) AS completed_projects,
+        COALESCE(SUM(DISTINCT CASE WHEN p.state = 'COMPLETED' THEN p.total_amount ELSE 0 END), 0) AS total_spent,
         COUNT(CASE WHEN m.state = 'SUBMITTED' THEN 1 END) AS pending_approvals
        FROM projects p
        LEFT JOIN milestones m ON m.project_id = p.id

@@ -141,20 +141,19 @@ Get your token from \`POST /auth/login\` or \`POST /auth/register\`.
         { name: 'Onboarding', description: 'Multi-step onboarding for providers and clients' },
         { name: 'Projects', description: 'Project creation, acceptance, state management' },
         { name: 'Milestones', description: 'Submit, approve, dispute milestone deliverables' },
+        { name: 'Dashboard', description: 'Provider, client, and admin dashboard summaries' },
         { name: 'Payments', description: 'Inbound payment reconciliation and history' },
         { name: 'Webhooks', description: 'Nomba webhook receiver (not for frontend use)' },
         { name: 'Notifications', description: 'In-app notification management' },
         { name: 'Admin', description: 'Admin-only — disputes, users, transactions' },
       ],
     },
-
     apis: [
-  `${__dirname}/../controllers/*.ts`,
-  `${__dirname}/../controllers/*.js`,
-  `${__dirname}/../routes/*.ts`,
-  `${__dirname}/../routes/*.js`,
-],
-
+      `${__dirname}/../controllers/*.ts`,
+      `${__dirname}/../controllers/*.js`,
+      `${__dirname}/../routes/*.ts`,
+      `${__dirname}/../routes/*.js`,
+      ],
   };
 
   return swaggerJsdoc(options);

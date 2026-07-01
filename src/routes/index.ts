@@ -6,6 +6,7 @@ import { upload } from '../middleware/upload.middleware';
 // Controllers
 import * as auth from '../controllers/auth.controller';
 import * as project from '../controllers/project.controller';
+import * as dashboard from '../controllers/dashboard.controller';
 import * as misc from '../controllers/misc.controller';
 
 const router = Router();
@@ -148,6 +149,11 @@ router.post('/projects/:id/accept', authenticate, requireRole('client'), project
 router.post('/projects/:id/cancel', authenticate, project.cancelProject);
 router.get('/projects/:id/audit', authenticate, project.getAuditLog);
 router.get('/projects/:id/payments', authenticate, project.getProjectPayments);
+
+// ─── Dashboards ───────────────────────────────────────────────────────────────
+router.get('/dashboard/provider', authenticate, requireRole('provider'), dashboard.providerDashboard);
+router.get('/dashboard/client', authenticate, requireRole('client'), dashboard.clientDashboard);
+router.get('/dashboard/admin', authenticate, requireRole('admin'), dashboard.adminDashboard);
 
 // ─── Milestones ───────────────────────────────────────────────────────────────
 router.get('/projects/:id/milestones/:mid', authenticate, project.getMilestone);
