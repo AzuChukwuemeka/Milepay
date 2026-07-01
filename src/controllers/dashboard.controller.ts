@@ -10,8 +10,17 @@ import pool from '../config/database';
  *   get:
  *     tags: [Dashboard]
  *     summary: Provider dashboard — active projects, pending milestones, earnings summary, recent activity
+ *     description: No request body or query parameters are required. This endpoint only needs an Authorization header with a bearer token.
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: Authorization
+ *         required: true
+ *         description: Bearer token for the authenticated provider user.
+ *         schema:
+ *           type: string
+ *           example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwidXNlcklkIjoiZGVtbzEyMyIsInJvbGUiOiJwcm92aWRlciJ9.signature
  *     responses:
  *       200:
  *         description: Provider dashboard data
@@ -155,8 +164,17 @@ export const providerDashboard = async (req: Request, res: Response, next: NextF
  *   get:
  *     tags: [Dashboard]
  *     summary: Client dashboard — funded projects, pending approvals, history
+ *     description: No request body or query parameters are required. This endpoint only needs an Authorization header with a bearer token.
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: Authorization
+ *         required: true
+ *         description: Bearer token for the authenticated client user.
+ *         schema:
+ *           type: string
+ *           example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwidXNlcklkIjoiZGVtbzEyMyIsInJvbGUiOiJjbGllbnQifQ.signature
  *     responses:
  *       200:
  *         description: Client dashboard data
@@ -278,8 +296,17 @@ export const clientDashboard = async (req: Request, res: Response, next: NextFun
  *   get:
  *     tags: [Dashboard]
  *     summary: Admin dashboard — platform overview, disputes, volume, stats
+ *     description: No request body or query parameters are required. This endpoint only needs an Authorization header with a bearer token.
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: Authorization
+ *         required: true
+ *         description: Bearer token for the authenticated admin user.
+ *         schema:
+ *           type: string
+ *           example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwidXNlcklkIjoiYWRtaW4tZGVtbyIsInJvbGUiOiJhZG1pbiJ9.signature
  *     responses:
  *       200:
  *         description: Admin dashboard data
