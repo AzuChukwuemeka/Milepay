@@ -11,7 +11,7 @@ export class MilestoneRepository {
     orderIndex: number;
   }[]): Promise<Milestone[]> {
     const values = milestones.map((m, i) => {
-      const base = i * 5;
+      const base = i * 6;
       return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
     });
 
