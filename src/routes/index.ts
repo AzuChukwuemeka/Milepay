@@ -107,6 +107,7 @@ router.post('/auth/verify-email', auth.verifyEmail);
 router.post('/auth/forgot-password', auth.forgotPassword);
 router.post('/auth/reset-password', auth.resetPassword);
 router.get('/auth/me', authenticate, auth.getMe);
+router.post('/auth/create-admin', authenticate, requireRole('admin'), auth.createAdmin);
 
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 router.post(

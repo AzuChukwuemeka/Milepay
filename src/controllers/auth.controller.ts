@@ -84,8 +84,16 @@ export const register = async (req: Request, res: Response, next: NextFunction):
  *               email:
  *                 type: string
  *                 format: email
+ *                 example: admin@milepay.com
  *               password:
  *                 type: string
+ *                 example: Admin@123456
+ *           examples:
+ *             admin_login:
+ *               summary: Admin Login
+ *               value:
+ *                 email: admin@milepay.com
+ *                 password: Admin@123456
  *     responses:
  *       200:
  *         description: Login successful. Returns JWT token.
@@ -224,6 +232,73 @@ export const getMe = async (req: Request, res: Response, next: NextFunction): Pr
   try {
     const result = await authService.getMe(req.user!.userId);
     sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createAdminSchema = z.object({
+  name: z.string().min(2).max(100),
+  email: z.string().email(),
+  phone: z.string().min(10).max(15),
+  password: z.string().min(8),
+});
+
+/**
+ * @swagger
+ * /auth/create-admin:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Create a new admin account (admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, email, phone, password]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: New Admin
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: newadmin@milepay.com
+ *               phone:
+ *                 type: string
+ *                 example: "08098765432"
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: SecureAdmin@2024
+ *           examples:
+ *             create_admin:
+ *               summary: Create new admin account
+ *               value:
+ *                 name: New Admin
+ *                 email: newadmin@milepay.com
+ *                 phone: "08098765432"
+ *                 password: SecureAdmin@2024
+ *     responses:
+ *       201:
+ *         description: Admin account created successfully
+ *       409:
+ *         description: Email already taken
+ *       403:
+ *         description: Forbidden - only admins can create admin accounts
+ */
+export const createAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const parsed = createAdminSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, 400, 'VALIDATION_ERROR', parsed.error.errors[0].message, parsed.error.errors[0].path[0] as string);
+      return;
+    }
+    const result = await authService.createAdmin(parsed.data);
+    sendSuccess(res, result, 'Admin account created successfully', 201);
   } catch (err) {
     next(err);
   }

@@ -137,6 +137,37 @@ export class AuthService {
     return { ...user, profile };
   }
 
+  async createAdmin(data: { name: string; email: string; phone: string; password: string }): Promise<AuthResponse> {
+    const existing = await userRepository.findByEmail(data.email);
+    if (existing) throw new AppError(409, 'EMAIL_TAKEN', 'An account with this email already exists');
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    const user = await userRepository.create({
+      email: data.email,
+      phone: data.phone,
+      name: data.name,
+      passwordHash,
+      role: 'admin',
+      emailVerified: true,
+      onboardingComplete: true,
+    });
+
+    const token = this.generateToken(user.id, user.email, user.role);
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        onboarding_complete: user.onboarding_complete,
+        email_verified: user.email_verified,
+      },
+    };
+  }
+
   private generateToken(userId: string, email: string, role: string): string {
     const payload: JWTPayload = { userId, email, role: role as JWTPayload['role'] };
     return jwt.sign(payload, process.env.JWT_SECRET!, { expiresIn: '7d' });
