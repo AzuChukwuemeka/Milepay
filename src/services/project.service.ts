@@ -123,9 +123,9 @@ export class ProjectService {
 
       await projectRepository.updateVirtualAccount(projectId, {
         virtualAccountId: virtualAccount.accountRef,
-        virtualAccountNumber: virtualAccount.accountNumber,
+        virtualAccountNumber: virtualAccount.bankAccountNumber,   // was: virtualAccount.accountNumber
         virtualAccountBank: virtualAccount.bankName,
-        virtualAccountName: virtualAccount.accountName,
+        virtualAccountName: virtualAccount.bankAccountName,       // was: virtualAccount.accountName
         nombaAccountRef: accountRef,
       });
 
@@ -145,16 +145,16 @@ export class ProjectService {
         metadata: { projectId },
       });
 
-      return {
-        virtualAccount: {
-          accountNumber: virtualAccount.accountNumber,
-          bankName: virtualAccount.bankName,
-          accountName: virtualAccount.accountName,
-          amount: project.total_amount,
-          currency: project.currency,
-        },
-      };
-  }
+  return {
+    virtualAccount: {
+      accountNumber: virtualAccount.bankAccountNumber,
+      bankName: virtualAccount.bankName,
+      accountName: virtualAccount.bankAccountName,
+      amount: project.total_amount,
+      currency: project.currency,
+    },
+  };
+}
   async cancelProject(projectId: string, userId: string, reason: string): Promise<void> {
     const project = await projectRepository.findById(projectId);
     if (!project) throw new NotFoundError('Project');

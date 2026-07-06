@@ -206,11 +206,11 @@ export interface NombaVirtualAccountResponse {
   code: string;
   description: string;
   data: {
-    accountNumber: string;
+    accountRef: string;
     accountName: string;
     bankName: string;
-    bankCode: string;
-    accountRef: string;
+    bankAccountNumber: string;
+    bankAccountName: string;
   };
 }
 
