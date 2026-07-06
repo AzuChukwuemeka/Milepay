@@ -158,16 +158,20 @@ export async function initiateTransfer(params: {
 // ─── Bank Account Resolution ──────────────────────────────────────────────────
 
 export async function resolveBankAccount(params: {
-  accountNumber: string;
-  bankCode: string;
+    accountNumber: string;
+    bankCode: string;
 }): Promise<NombaBankResolveResponse['data']> {
-  const data = await nombaRequest<NombaBankResolveResponse>(
-    'GET',
-    `/v1/accounts/resolve?accountNumber=${params.accountNumber}&bankCode=${params.bankCode}`
-  );
-  return data.data;
-}
+    const data = await nombaRequest<NombaBankResolveResponse>(
+        'POST',
+        '/v1/transfers/bank/lookup',
+        {
+            accountNumber: params.accountNumber,
+            bankCode: params.bankCode,
+        }
+    );
 
+    return data.data;
+}
 // ─── Fetch Virtual Account Transactions ──────────────────────────────────────
 
 export async function fetchVirtualAccountTransactions(accountRef: string): Promise<unknown[]> {
