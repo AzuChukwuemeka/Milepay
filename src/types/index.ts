@@ -203,15 +203,19 @@ export interface NombaTokenResponse {
 }
 
 export interface NombaVirtualAccountResponse {
-  code: string;
-  description: string;
-  data: {
-    accountRef: string;
-    accountName: string;
-    bankName: string;
-    bankAccountNumber: string;
-    bankAccountName: string;
-  };
+    code: string;
+    description: string;
+    data: {
+        accountRef: string;
+        accountName: string;
+        currency: string;
+        bankName: string;
+        bankAccountNumber: string;
+        bankAccountName: string;
+        accountHolderId?: string;
+        createdAt?: string;
+        expired?: boolean;
+    };
 }
 
 export interface NombaTransferResponse {

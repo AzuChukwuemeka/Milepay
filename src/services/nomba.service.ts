@@ -88,6 +88,11 @@ async function nombaRequest<T>(
   const token = await getNombaToken();
   const accountId = useSubAccount ? SUB_ACCOUNT_ID : PARENT_ACCOUNT_ID;
 
+  console.log("NOMBA URL:", `${NOMBA_BASE_URL}${path}`);
+  console.log("NOMBA METHOD:", method);
+  console.log("NOMBA BODY:", body);
+  console.log("NOMBA ACCOUNT ID:", accountId);
+
   const response = await fetch(`${NOMBA_BASE_URL}${path}`, {
     method,
     headers: {
@@ -115,25 +120,33 @@ async function nombaRequest<T>(
 // ─── Virtual Accounts ─────────────────────────────────────────────────────────
 
 export async function createVirtualAccount(params: {
-  accountRef: string;
-  accountName: string;
-  bvn?: string;
-  expectedAmount?: number;
+    accountRef: string;
+    accountName: string;
+    currency: string;
+    bvn?: string;
+    expectedAmount?: number;
 }): Promise<NombaVirtualAccountResponse['data']> {
-  const data = await nombaRequest<NombaVirtualAccountResponse>(
-    'POST',
-    '/v1/accounts/virtual',
-    {
-      accountRef: params.accountRef,
-      accountName: params.accountName,
-      ...(params.bvn && { bvn: params.bvn }),
-      ...(params.expectedAmount !== undefined && { expectedAmount: params.expectedAmount }),
-    }
-  );
-console.log('RAW NOMBA VIRTUAL ACCOUNT RESPONSE:', JSON.stringify(data, null, 2));
-  return data.data;
-}
+    const data = await nombaRequest<NombaVirtualAccountResponse>(
+        'POST',
+        '/v1/accounts/virtual',
+        {
+            accountRef: params.accountRef,
+            accountName: params.accountName,
+            currency: params.currency,
+            ...(params.bvn && { bvn: params.bvn }),
+            ...(params.expectedAmount !== undefined && {
+                expectedAmount: params.expectedAmount
+            }),
+        }
+    );
 
+    console.log(
+        'RAW NOMBA VIRTUAL ACCOUNT RESPONSE:',
+        JSON.stringify(data, null, 2)
+    );
+
+    return data.data;
+}
 // ─── Transfers ────────────────────────────────────────────────────────────────
 
 export async function initiateTransfer(params: {
