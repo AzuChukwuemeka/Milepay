@@ -92,71 +92,69 @@ export class ProjectService {
   }
 
   async acceptProject(projectId: string, clientId: string): Promise<Record<string, unknown>> {
-    const project = await projectRepository.findById(projectId);
-    if (!project) throw new NotFoundError('Project');
+      const project = await projectRepository.findById(projectId);
+      if (!project) throw new NotFoundError('Project');
 
-    if (project.state !== 'DRAFT' && project.state !== 'PENDING_ACCEPTANCE') {
-      throw new ConflictError(`Project cannot be accepted in state: ${project.state}`);
-    }
+      if (project.state !== 'DRAFT' && project.state !== 'PENDING_ACCEPTANCE') {
+        throw new ConflictError(`Project cannot be accepted in state: ${project.state}`);
+      }
 
-    if (project.provider_id === clientId) {
-      throw new ForbiddenError('You cannot accept your own project');
-    }
+      if (project.provider_id === clientId) {
+        throw new ForbiddenError('You cannot accept your own project');
+      }
 
-    // Set client
-    await projectRepository.setClient(projectId, clientId);
+      // Provision Nomba virtual account FIRST — before touching any project state
+      const accountRef = `PROJ-${projectId.replace(/-/g, '').substring(0, 16)}`;
 
-    // Provision Nomba virtual account
-    const accountRef = `PROJ-${projectId.replace(/-/g, '').substring(0, 16)}`;
+      const { pool } = await import('../config/database');
+      const providerResult = await pool.query(
+        `SELECT u.name FROM users u WHERE u.id = $1`,
+        [project.provider_id]
+      );
+      const providerName = providerResult.rows[0]?.name ?? 'MilePay Project';
 
-    const { pool } = await import('../config/database');
-    const providerResult = await pool.query(
-      `SELECT u.name FROM users u WHERE u.id = $1`,
-      [project.provider_id]
-    );
-    const providerName = providerResult.rows[0]?.name ?? 'MilePay Project';
+      const virtualAccount = await createVirtualAccount({
+        accountRef,
+        accountName: `${providerName} - ${project.title}`.substring(0, 50),
+      });
 
-    const virtualAccount = await createVirtualAccount({
-      accountRef,
-      accountName: `${providerName} - ${project.title}`.substring(0, 50),
-      // expectedAmount: Number(project.total_amount),
-    });
-    console.log(virtualAccount);
-    await projectRepository.updateVirtualAccount(projectId, {
-      virtualAccountId: virtualAccount.accountRef,
-      virtualAccountNumber: virtualAccount.accountNumber,
-      virtualAccountBank: virtualAccount.bankName,
-      virtualAccountName: virtualAccount.accountName,
-      nombaAccountRef: accountRef,
-    });
+      // Only now — after Nomba confirms success — commit the state change
+      await projectRepository.setClient(projectId, clientId);
 
-    await auditRepository.log({
-      projectId,
-      eventType: 'PROJECT_ACCEPTED',
-      actorId: clientId,
-      actorRole: 'client',
-      metadata: { virtualAccountNumber: virtualAccount.accountNumber },
-    });
+      await projectRepository.updateVirtualAccount(projectId, {
+        virtualAccountId: virtualAccount.accountRef,
+        virtualAccountNumber: virtualAccount.accountNumber,
+        virtualAccountBank: virtualAccount.bankName,
+        virtualAccountName: virtualAccount.accountName,
+        nombaAccountRef: accountRef,
+      });
 
-    await notificationRepository.create({
-      userId: project.provider_id,
-      title: 'Project Accepted',
-      message: `Your project "${project.title}" has been accepted. Waiting for client payment.`,
-      type: 'PROJECT_ACCEPTED',
-      metadata: { projectId },
-    });
+      await auditRepository.log({
+        projectId,
+        eventType: 'PROJECT_ACCEPTED',
+        actorId: clientId,
+        actorRole: 'client',
+        metadata: { virtualAccountNumber: virtualAccount.accountNumber },
+      });
 
-    return {
-      virtualAccount: {
-        accountNumber: virtualAccount.accountNumber,
-        bankName: virtualAccount.bankName,
-        accountName: virtualAccount.accountName,
-        amount: project.total_amount,
-        currency: project.currency,
-      },
-    };
+      await notificationRepository.create({
+        userId: project.provider_id,
+        title: 'Project Accepted',
+        message: `Your project "${project.title}" has been accepted. Waiting for client payment.`,
+        type: 'PROJECT_ACCEPTED',
+        metadata: { projectId },
+      });
+
+      return {
+        virtualAccount: {
+          accountNumber: virtualAccount.accountNumber,
+          bankName: virtualAccount.bankName,
+          accountName: virtualAccount.accountName,
+          amount: project.total_amount,
+          currency: project.currency,
+        },
+      };
   }
-
   async cancelProject(projectId: string, userId: string, reason: string): Promise<void> {
     const project = await projectRepository.findById(projectId);
     if (!project) throw new NotFoundError('Project');
