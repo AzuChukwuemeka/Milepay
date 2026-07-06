@@ -150,6 +150,8 @@ router.post('/projects/:id/accept', authenticate, requireRole('client'), project
 router.post('/projects/:id/cancel', authenticate, project.cancelProject);
 router.get('/projects/:id/audit', authenticate, project.getAuditLog);
 router.get('/projects/:id/payments', authenticate, project.getProjectPayments);
+router.get('/projects/:id/payments/instructions', authenticate, project.getProjectPaymentInstructions);
+router.post('/projects/:id/refund-overpayment', authenticate, requireRole('client'), project.refundOverpayment);
 
 // ─── Dashboards ───────────────────────────────────────────────────────────────
 router.get('/dashboard/provider', authenticate, requireRole('provider'), dashboard.providerDashboard);

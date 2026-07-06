@@ -297,8 +297,97 @@ export const getAuditLog = async (req: Request, res: Response, next: NextFunctio
  */
 export const getProjectPayments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const payments = await paymentRepository.findByProjectId(req.params.id);
+    const payments = await projectService.getProjectPayments(req.params.id, req.user!.userId, req.user!.role);
     sendSuccess(res, payments);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @swagger
+ * /projects/{id}/payments/instructions:
+ *   get:
+ *     tags: [Payments]
+ *     summary: Get payment instructions for a project
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Project payment instructions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 projectId:
+ *                   type: string
+ *                 title:
+ *                   type: string
+ *                 currency:
+ *                   type: string
+ *                 totalAmount:
+ *                   type: number
+ *                 amountPaid:
+ *                   type: number
+ *                 amountDue:
+ *                   type: number
+ *                 overpaymentAmount:
+ *                   type: number
+ *                 virtualAccount:
+ *                   $ref: '#/components/schemas/VirtualAccount'
+ *                 state:
+ *                   type: string
+ *                 shareUrl:
+ *                   type: string
+ *       403:
+ *         description: Unauthorized to view this project
+ *       404:
+ *         description: Project not found or no payment instructions available
+ */
+export const getProjectPaymentInstructions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await projectService.getPaymentInstructions(req.params.id, req.user!.userId, req.user!.role);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @swagger
+ * /projects/{id}/refund-overpayment:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Refund overpayment for a project
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Overpayment refund processed
+ *       400:
+ *         description: No overpayment available to refund
+ *       403:
+ *         description: Not authorized to refund this project
+ *       404:
+ *         description: Project not found
+ */
+export const refundOverpayment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await projectService.refundOverpayment(req.params.id, req.user!.userId, req.user!.role);
+    sendSuccess(res, result, 'Overpayment refund processed');
   } catch (err) {
     next(err);
   }

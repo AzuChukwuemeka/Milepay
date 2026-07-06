@@ -77,7 +77,7 @@ async function nombaRequest<T>(
   method: string,
   path: string,
   body?: Record<string, unknown>,
-  useSubAccount = true
+  useSubAccount = false
 ): Promise<T> {
   const token = await getNombaToken();
   const accountId = useSubAccount ? SUB_ACCOUNT_ID : PARENT_ACCOUNT_ID;
@@ -106,8 +106,8 @@ async function nombaRequest<T>(
 export async function createVirtualAccount(params: {
   accountRef: string;
   accountName: string;
-  expectedAmount?: number;
   bvn?: string;
+  expectedAmount?: number;
 }): Promise<NombaVirtualAccountResponse['data']> {
   const data = await nombaRequest<NombaVirtualAccountResponse>(
     'POST',
@@ -115,8 +115,8 @@ export async function createVirtualAccount(params: {
     {
       accountRef: params.accountRef,
       accountName: params.accountName,
-      ...(params.expectedAmount && { expectedAmount: params.expectedAmount.toString() }),
       ...(params.bvn && { bvn: params.bvn }),
+      ...(params.expectedAmount !== undefined && { expectedAmount: params.expectedAmount }),
     }
   );
   return data.data;
@@ -138,9 +138,11 @@ export async function initiateTransfer(params: {
     {
       amount: params.amount,
       accountNumber: params.accountNumber,
+      accountName: params.accountName,
       bankCode: params.bankCode,
-      narration: params.narration,
       merchantTxRef: params.idempotencyKey,
+      senderName: params.accountName,
+      narration: params.narration,
     }
   );
   return data.data;
@@ -153,12 +155,8 @@ export async function resolveBankAccount(params: {
   bankCode: string;
 }): Promise<NombaBankResolveResponse['data']> {
   const data = await nombaRequest<NombaBankResolveResponse>(
-    'POST',
-    '/v1/transfers/bank/lookup',
-    {
-      accountNumber: params.accountNumber,
-      bankCode: params.bankCode,
-    }
+    'GET',
+    `/v1/accounts/resolve?accountNumber=${params.accountNumber}&bankCode=${params.bankCode}`
   );
   return data.data;
 }

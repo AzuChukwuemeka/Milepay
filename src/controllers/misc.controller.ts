@@ -54,10 +54,11 @@ const NIGERIAN_BANKS: Record<string, string> = {
  */
 export const nombaWebhook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const signature = req.headers['x-nomba-signature'] as string;
-    const rawBody = JSON.stringify(req.body);
+    const signature = (req.headers['nomba-signature'] || req.headers['x-nomba-signature']) as string;
+    const timestamp = (req.headers['nomba-timestamp'] || req.headers['x-nomba-timestamp']) as string;
+    const rawBody = (req as any).rawBody ?? JSON.stringify(req.body);
 
-    if (signature && !webhookService.verifySignature(rawBody, signature)) {
+    if (!webhookService.verifySignature(rawBody, signature, timestamp)) {
       sendError(res, 401, 'INVALID_SIGNATURE', 'Webhook signature verification failed');
       return;
     }
@@ -206,7 +207,7 @@ export const providerIdentity = async (req: Request, res: Response, next: NextFu
       return;
     }
 
-    const validIdTypes = ['NIN', 'voters_card', 'passport', 'drivers_licence'];
+    const validIdTypes = ['NIN','nin', 'voters_card', 'passport', 'drivers_licence'];
     if (!validIdTypes.includes(idType)) {
       sendError(res, 400, 'VALIDATION_ERROR', 'Invalid ID type. Must be NIN, voters_card, passport or drivers_licence', 'idType');
       return;

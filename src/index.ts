@@ -22,7 +22,13 @@ app.use(cors());
 // ─── Body Parsing ─────────────────────────────────────────────────────────────
 app.use('/v1/webhooks/nomba', express.raw({ type: 'application/json' }), (req, _res, next) => {
   if (Buffer.isBuffer(req.body)) {
-    req.body = JSON.parse(req.body.toString());
+    const rawBody = req.body.toString();
+    (req as any).rawBody = rawBody;
+    try {
+      req.body = JSON.parse(rawBody);
+    } catch {
+      req.body = {};
+    }
   }
   next();
 });

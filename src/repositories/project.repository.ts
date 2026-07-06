@@ -84,6 +84,10 @@ export class ProjectRepository {
     );
   }
 
+  async refundOverpayment(id: string): Promise<void> {
+    await pool.query(`UPDATE projects SET overpayment_amount = 0 WHERE id = $1`, [id]);
+  }
+
   async findByUser(userId: string, role: 'provider' | 'client', filters: {
     state?: ProjectState;
     page: number;

@@ -127,10 +127,10 @@ export class MilestoneService {
         accountNumber: provider.account_number,
         accountName: provider.account_name,
         narration: `MilePay: ${project.title} - ${milestone.title}`,
-        idempotencyKey: `MPAY-${milestoneId}-${attempts}`,
+        idempotencyKey: `MPAY-${milestoneId}`,
       });
 
-      await milestoneRepository.setPaid(milestoneId, transfer.transactionRef);
+      await milestoneRepository.setPaid(milestoneId, transfer.id);
 
       // Unlock next milestone
       const nextMilestone = await milestoneRepository.findNextMilestone(projectId, milestone.order_index);

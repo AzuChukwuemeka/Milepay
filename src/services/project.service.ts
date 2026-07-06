@@ -1,8 +1,7 @@
 import { projectRepository } from '../repositories/project.repository';
 import { milestoneRepository } from '../repositories/milestone.repository';
-import { auditRepository } from '../repositories/shared.repository';
-import { notificationRepository } from '../repositories/shared.repository';
-import { CreateProjectDTO, ProjectState, ProjectListQuery } from '../types';
+import { auditRepository, notificationRepository, paymentRepository } from '../repositories/shared.repository';
+import { CreateProjectDTO, ProjectState, ProjectListQuery, Payment } from '../types';
 import { createVirtualAccount } from './nomba.service';
 import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '../utils/response';
 
@@ -81,6 +80,17 @@ export class ProjectService {
     return { ...project, milestones, audit_log: auditLog };
   }
 
+  async getProjectPayments(projectId: string, userId: string, userRole: string): Promise<Payment[]> {
+    const project = await projectRepository.findById(projectId);
+    if (!project) throw new NotFoundError('Project');
+
+    if (userRole !== 'admin' && project.provider_id !== userId && project.client_id !== userId) {
+      throw new ForbiddenError();
+    }
+
+    return paymentRepository.findByProjectId(projectId);
+  }
+
   async acceptProject(projectId: string, clientId: string): Promise<Record<string, unknown>> {
     const project = await projectRepository.findById(projectId);
     if (!project) throw new NotFoundError('Project');
@@ -107,11 +117,11 @@ export class ProjectService {
     const providerName = providerResult.rows[0]?.name ?? 'MilePay Project';
 
     const virtualAccount = await createVirtualAccount({
-       accountRef,
-       accountName: `${providerName} - ${project.title}`.substring(0, 50),
-       expectedAmount: Number(project.total_amount),
+      accountRef,
+      accountName: `${providerName} - ${project.title}`.substring(0, 50),
+      expectedAmount: Number(project.total_amount),
     });
-    
+
     await projectRepository.updateVirtualAccount(projectId, {
       virtualAccountId: virtualAccount.accountRef,
       virtualAccountNumber: virtualAccount.accountNumber,
@@ -193,6 +203,86 @@ export class ProjectService {
     }
 
     return auditRepository.findByProjectId(projectId);
+  }
+
+  async getPaymentInstructions(projectId: string, userId: string, userRole: string): Promise<Record<string, unknown>> {
+    const project = await projectRepository.findById(projectId);
+    if (!project) throw new NotFoundError('Project');
+
+    if (userRole !== 'admin' && project.provider_id !== userId && project.client_id !== userId) {
+      throw new ForbiddenError();
+    }
+
+    if (!project.virtual_account_number || !project.virtual_account_bank || !project.virtual_account_name) {
+      throw new NotFoundError('Payment instructions are not yet available for this project');
+    }
+
+    const amountDue = Math.max(Number(project.total_amount) - Number(project.amount_paid), 0);
+    const overpaymentAmount = Number(project.overpayment_amount || 0);
+
+    return {
+      projectId: project.id,
+      title: project.title,
+      currency: project.currency,
+      totalAmount: project.total_amount,
+      amountPaid: project.amount_paid,
+      amountDue,
+      overpaymentAmount,
+      virtualAccount: {
+        accountNumber: project.virtual_account_number,
+        bankName: project.virtual_account_bank,
+        accountName: project.virtual_account_name,
+        accountRef: project.nomba_account_ref,
+      },
+      state: project.state,
+      shareUrl: project.share_url,
+    };
+  }
+
+  async refundOverpayment(projectId: string, userId: string, userRole: string): Promise<{ refundedAmount: number }> {
+    const project = await projectRepository.findById(projectId);
+    if (!project) throw new NotFoundError('Project');
+
+    if (userRole !== 'admin' && project.client_id !== userId) {
+      throw new ForbiddenError();
+    }
+
+    const overpaymentAmount = Number(project.overpayment_amount || 0);
+    if (overpaymentAmount <= 0) {
+      throw new ValidationError('No overpayment available to refund');
+    }
+
+    await projectRepository.refundOverpayment(projectId);
+
+    await auditRepository.log({
+      projectId,
+      eventType: 'OVERPAYMENT_REFUNDED',
+      actorId: userId,
+      actorRole: userRole === 'admin' ? 'admin' : 'client',
+      metadata: { refundedAmount: overpaymentAmount },
+    });
+
+    if (project.client_id) {
+      await notificationRepository.create({
+        userId: project.client_id,
+        title: 'Overpayment Refunded',
+        message: `Your overpayment of ₦${overpaymentAmount.toLocaleString()} has been marked for refund.`,
+        type: 'OVERPAYMENT_REFUNDED',
+        metadata: { projectId, refundedAmount: overpaymentAmount },
+      });
+    }
+
+    if (project.provider_id) {
+      await notificationRepository.create({
+        userId: project.provider_id,
+        title: 'Project Overpayment Refunded',
+        message: `Overpayment for project "${project.title}" is being refunded.`,
+        type: 'OVERPAYMENT_REFUNDED',
+        metadata: { projectId, refundedAmount: overpaymentAmount },
+      });
+    }
+
+    return { refundedAmount: overpaymentAmount };
   }
 }
 

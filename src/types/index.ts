@@ -218,7 +218,8 @@ export interface NombaTransferResponse {
   code: string;
   description: string;
   data: {
-    transactionRef: string;
+    id: string;
+    transactionRef?: string;
     status: string;
     amount: number;
   };
@@ -228,7 +229,7 @@ export interface NombaWebhookPayload {
   event_type: 'payment_success' | 'payment_failed' | 'payout_success' | 'payout_failed';
   requestId: string;
   data: {
-    merchant: { userId: string };
+    merchant: { userId: string; walletId?: string };
     transaction: {
       fee: number;
       type: string;
@@ -236,6 +237,7 @@ export interface NombaWebhookPayload {
       merchantTxRef: string;
       transactionAmount: number;
       time: string;
+      responseCode?: string;
     };
     order?: {
       amount: number;

@@ -143,15 +143,21 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(data.password, 12);
 
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     const user = await userRepository.create({
       email: data.email,
       phone: data.phone,
       name: data.name,
       passwordHash,
       role: 'admin',
-      emailVerified: true,
-      onboardingComplete: true,
+      emailVerifyToken: verifyToken,
+      emailVerifyExpires: verifyExpires,
     });
+
+    await userRepository.verifyEmail(user.id);
+    await userRepository.markOnboardingComplete(user.id);
 
     const token = this.generateToken(user.id, user.email, user.role);
 

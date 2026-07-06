@@ -5,19 +5,41 @@ import { auditRepository, notificationRepository, paymentRepository } from '../r
 import { NombaWebhookPayload } from '../types';
 
 export class WebhookService {
-  verifySignature(payload: string, signature: string): boolean {
+  verifySignature(payload: string, signature: string, timestamp?: string): boolean {
     const secret = process.env.NOMBA_WEBHOOK_SECRET;
     if (!secret) return true; // Skip verification in dev if no secret set
+    if (!signature || !timestamp) return false;
 
-    const expectedSig = crypto
-      .createHmac('sha512', secret)
-      .update(payload)
-      .digest('hex');
+    let parsedPayload: NombaWebhookPayload;
+    try {
+      parsedPayload = JSON.parse(payload) as NombaWebhookPayload;
+    } catch {
+      return false;
+    }
 
-    return crypto.timingSafeEqual(
-      Buffer.from(signature, 'hex'),
-      Buffer.from(expectedSig, 'hex')
-    );
+    const merchantUserId = parsedPayload.data?.merchant?.userId ?? '';
+    const merchantWalletId = parsedPayload.data?.merchant?.walletId ?? '';
+    const transaction = parsedPayload.data?.transaction ?? {
+      transactionId: '',
+      type: '',
+      time: '',
+      responseCode: '',
+    };
+
+    let responseCode = transaction.responseCode ?? '';
+    if (responseCode === 'null') responseCode = '';
+
+    const hashingPayload = `${parsedPayload.event_type}:${parsedPayload.requestId}:${merchantUserId}:${merchantWalletId}:${transaction.transactionId}:${transaction.type}:${transaction.time}:${responseCode}:${timestamp}`;
+    const expectedSig = crypto.createHmac('sha256', secret).update(hashingPayload).digest('base64');
+
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(signature, 'base64'),
+        Buffer.from(expectedSig, 'base64')
+      );
+    } catch {
+      return false;
+    }
   }
 
   async handleInboundPayment(payload: NombaWebhookPayload): Promise<void> {
