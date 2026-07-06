@@ -135,7 +135,8 @@ router.post('/onboarding/provider/bank', authenticate, requireRole('provider'), 
 router.post('/onboarding/provider/confirm', authenticate, requireRole('provider'), misc.providerConfirm);
 router.post('/onboarding/client/profile', authenticate, requireRole('client'), misc.clientProfile);
 router.post('/onboarding/client/confirm', authenticate, requireRole('client'), misc.clientConfirm);
-router.get('/banks', misc.bankLookup);
+router.post('/banks/lookup', misc.bankLookup);
+router.get('/banks', misc.getBanks);
 
 // ─── Provider Public Profile & Earnings ───────────────────────────────────────
 router.get('/providers/:username', misc.getProviderProfile);
