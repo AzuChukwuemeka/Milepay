@@ -128,6 +128,7 @@ export async function createVirtualAccount(params: {
       ...(params.expectedAmount !== undefined && { expectedAmount: params.expectedAmount }),
     }
   );
+console.log('RAW NOMBA VIRTUAL ACCOUNT RESPONSE:', JSON.stringify(data, null, 2));
   return data.data;
 }
 

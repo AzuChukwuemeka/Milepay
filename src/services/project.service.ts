@@ -134,7 +134,7 @@ export class ProjectService {
         eventType: 'PROJECT_ACCEPTED',
         actorId: clientId,
         actorRole: 'client',
-        metadata: { virtualAccountNumber: virtualAccount.accountNumber },
+        metadata: { virtualAccountNumber: virtualAccount.bankAccountNumber },  // ← still the old field name
       });
 
       await notificationRepository.create({
