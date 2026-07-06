@@ -126,7 +126,15 @@ export async function createVirtualAccount(params: {
     bvn?: string;
     expectedAmount?: number;
 }): Promise<NombaVirtualAccountResponse['data']> {
-    const data = await nombaRequest<NombaVirtualAccountResponse>(
+  console.log("CREATE VIRTUAL ACCOUNT REQUEST BODY:", JSON.stringify({
+      accountRef: params.accountRef,
+      accountName: params.accountName,
+      currency: params.currency,
+      bvn: params.bvn,
+      expectedAmount: params.expectedAmount,
+  }, null, 2));
+
+  const data = await nombaRequest<NombaVirtualAccountResponse>(
         'POST',
         '/v1/accounts/virtual',
         {
