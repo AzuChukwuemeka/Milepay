@@ -70,13 +70,10 @@ async function fetchNewToken(): Promise<string> {
     throw new Error(`Nomba auth error: ${data.description}`);
   }
 
-  await cacheToken(data.data.access_token, data.data.refresh_token, data.data.expiresAt);
   return data.data.access_token;
 }
 
 export async function getNombaToken(): Promise<string> {
-  const cached = await getCachedToken();
-  if (cached) return cached;
   return fetchNewToken();
 }
 
