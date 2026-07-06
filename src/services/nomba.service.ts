@@ -6,10 +6,19 @@ import {
   NombaBankResolveResponse,
 } from '../types';
 
-// Auth always goes through api.nomba.com
-// Sandbox operations go through sandbox.nomba.com
+// ─── Environment Configuration ───────────────────────────────────────────
+// Nomba has TWO separate environments:
+//   SANDBOX: Test credentials → sandbox.nomba.com (for testing)
+//   PRODUCTION: Live credentials → api.nomba.com (for live transactions)
+//
+// IMPORTANT: Test credentials will NOT work on production URLs
+//            Live credentials will NOT work on sandbox URLs
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const NOMBA_AUTH_URL = 'https://api.nomba.com';
-const NOMBA_SANDBOX_URL = process.env.NOMBA_BASE_URL || 'https://sandbox.nomba.com';
+const NOMBA_BASE_URL = IS_PRODUCTION
+  ? 'https://api.nomba.com' // Production endpoint
+  : process.env.NOMBA_BASE_URL || 'https://sandbox.nomba.com'; // Sandbox endpoint
 
 const CLIENT_ID = process.env.NOMBA_CLIENT_ID!;
 const CLIENT_SECRET = process.env.NOMBA_CLIENT_SECRET!;
@@ -82,7 +91,7 @@ async function nombaRequest<T>(
   const token = await getNombaToken();
   const accountId = useSubAccount ? SUB_ACCOUNT_ID : PARENT_ACCOUNT_ID;
 
-  const response = await fetch(`${NOMBA_SANDBOX_URL}${path}`, {
+  const response = await fetch(`${NOMBA_BASE_URL}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
