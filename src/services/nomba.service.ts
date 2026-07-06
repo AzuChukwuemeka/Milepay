@@ -8,8 +8,8 @@ import {
 
 // ─── Environment Configuration ───────────────────────────────────────────
 // Nomba has TWO separate environments:
-//   SANDBOX: Test credentials → sandbox.nomba.com (for testing)
-//   PRODUCTION: Live credentials → api.nomba.com (for live transactions)
+//   SANDBOX: Test credentials: sandbox.nomba.com (for testing)
+//   PRODUCTION: Live credentials: api.nomba.com (for live transactions)
 //
 // IMPORTANT: Test credentials will NOT work on production URLs
 //            Live credentials will NOT work on sandbox URLs
