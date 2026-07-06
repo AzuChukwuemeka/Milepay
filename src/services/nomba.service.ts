@@ -157,6 +157,14 @@ export async function createVirtualAccount(params: {
 }
 // ─── Transfers ────────────────────────────────────────────────────────────────
 
+export async function fetchBanks(): Promise<Array<{ code: string; name: string }>> {
+  const data = await nombaRequest<{ code: string; data: { results: Array<{ code: string; name: string }> } }>(
+    'GET',
+    '/v1/transfers/banks'
+  );
+  return data.data.results;
+}
+
 export async function initiateTransfer(params: {
   amount: number;
   bankCode: string;

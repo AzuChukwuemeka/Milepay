@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { webhookService } from '../services/webhook.service';
-import { resolveBankAccount } from '../services/nomba.service';
 import { notificationRepository, disputeRepository, paymentRepository } from '../repositories/shared.repository';
 import { userRepository } from '../repositories/user.repository';
 import { milestoneService } from '../services/milestone.service';
 import { uploadToCloudinary } from '../services/cloudinary.service';
 import { sendSuccess, sendError } from '../utils/response';
+import { resolveBankAccount, fetchBanks } from '../services/nomba.service';
 import pool from '../config/database';
 
 // ─── Nigerian Banks Lookup ────────────────────────────────────────────────────
@@ -461,19 +461,115 @@ export const clientConfirm = async (req: Request, res: Response, next: NextFunct
 
 /**
  * @swagger
+ * /banks/lookup:
+ *   post:
+ *     tags: [Onboarding]
+ *     summary: Lookup/verify a bank account number via Nomba
+ *     description: Resolves a bank account number to get the account holder's name. Used for verifying bank details before saving.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [bankCode, accountNumber]
+ *             properties:
+ *               bankCode:
+ *                 type: string
+ *                 example: "044"
+ *                 description: Bank code from GET /banks
+ *               accountNumber:
+ *                 type: string
+ *                 example: "1938813553"
+ *                 description: 10-digit NUBAN account number
+ *     responses:
+ *       200:
+ *         description: Account resolved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     accountName:
+ *                       type: string
+ *                       example: "John Doe"
+ *                     accountNumber:
+ *                       type: string
+ *                       example: "1938813553"
+ *                     bankCode:
+ *                       type: string
+ *                       example: "044"
+ *                     bankName:
+ *                       type: string
+ *                       example: "Access Bank"
+ *       400:
+ *         description: Missing bankCode or accountNumber
+ *       500:
+ *         description: Nomba lookup failed
+ */
+export const bankLookup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { bankCode, accountNumber } = req.body;
+
+    if (!bankCode || !accountNumber) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'bankCode and accountNumber are required');
+      return;
+    }
+
+    if (accountNumber.length !== 10) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Account number must be 10 digits', 'accountNumber');
+      return;
+    }
+
+    const resolved = await resolveBankAccount({ bankCode, accountNumber });
+    const bankName = NIGERIAN_BANKS[bankCode] ?? bankCode;
+
+    sendSuccess(res, {
+      accountName: resolved.accountName,
+      accountNumber,
+      bankCode,
+      bankName,
+    }, 'Account resolved successfully');
+  } catch (err) { next(err); }
+};
+
+/**
+ * @swagger
  * /banks:
  *   get:
  *     tags: [Onboarding]
- *     summary: Get list of Nigerian banks (no auth required)
+ *     summary: Get list of Nigerian banks from Nomba (no auth required)
  *     responses:
  *       200:
  *         description: List of banks with code and name
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   code:
+ *                     type: string
+ *                     example: "058"
+ *                   name:
+ *                     type: string
+ *                     example: "Guaranty Trust Bank"
  */
 export const getBanks = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const banks = await fetchBanks();
+    sendSuccess(res, banks);
+  } catch {
+    // Fallback to hardcoded list if Nomba call fails
     const banks = Object.entries(NIGERIAN_BANKS).map(([code, name]) => ({ code, name }));
     sendSuccess(res, banks);
-  } catch (err) { next(err); }
+  }
 };
 
 // ─── Provider Public Profile ──────────────────────────────────────────────────
