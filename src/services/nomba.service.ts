@@ -101,6 +101,11 @@ async function nombaRequest<T>(
   const data = (await response.json()) as T & { code: string; description: string };
 
   if (!response.ok || data.code !== '00') {
+    console.error("========== NOMBA ERROR ==========");
+    console.error("STATUS:", response.status);
+    console.error("REQUEST BODY:", body);
+    console.error("RESPONSE:", JSON.stringify(data, null, 2));
+    console.error("=================================");
     throw new Error(`Nomba API error [${path}]: ${data.description || response.statusText}`);
   }
 
