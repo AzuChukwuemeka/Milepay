@@ -19,7 +19,7 @@ router.get('/verify-email', async (req, res) => {
       res.status(400).send(`
         <html>
           <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h2>❌ Invalid Link</h2>
+            <h2>Invalid Link</h2>
             <p>This verification link is invalid.</p>
           </body>
         </html>
@@ -30,7 +30,7 @@ router.get('/verify-email', async (req, res) => {
     res.send(`
       <html>
         <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-          <h2>✅ Email Verified Successfully</h2>
+          <h2>Email Verified Successfully</h2>
           <p>Your MilePay account is now active. You can close this tab.</p>
         </body>
       </html>

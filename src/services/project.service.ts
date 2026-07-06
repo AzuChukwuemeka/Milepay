@@ -121,7 +121,7 @@ export class ProjectService {
       accountName: `${providerName} - ${project.title}`.substring(0, 50),
       expectedAmount: Number(project.total_amount),
     });
-
+    console.log(virtualAccount);
     await projectRepository.updateVirtualAccount(projectId, {
       virtualAccountId: virtualAccount.accountRef,
       virtualAccountNumber: virtualAccount.accountNumber,
