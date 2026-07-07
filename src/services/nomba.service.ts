@@ -15,10 +15,11 @@ import {
 //            Live credentials will NOT work on sandbox URLs
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const NOMBA_AUTH_URL = 'https://api.nomba.com';
 const NOMBA_BASE_URL = IS_PRODUCTION
   ? 'https://api.nomba.com' // Production endpoint
   : process.env.NOMBA_BASE_URL || 'https://sandbox.nomba.com'; // Sandbox endpoint
+
+  const NOMBA_AUTH_URL = NOMBA_BASE_URL;
 
 const CLIENT_ID = process.env.NOMBA_CLIENT_ID!;
 const CLIENT_SECRET = process.env.NOMBA_CLIENT_SECRET!;
@@ -85,36 +86,42 @@ async function nombaRequest<T>(
   body?: Record<string, unknown>,
   useSubAccount = false
 ): Promise<T> {
-  const token = await getNombaToken();
-  const accountId = useSubAccount ? SUB_ACCOUNT_ID : PARENT_ACCOUNT_ID;
+    const token = await getNombaToken();
+    const accountId = useSubAccount ? SUB_ACCOUNT_ID : PARENT_ACCOUNT_ID;
 
-  console.log("NOMBA URL:", `${NOMBA_BASE_URL}${path}`);
-  console.log("NOMBA METHOD:", method);
-  console.log("NOMBA BODY:", body);
-  console.log("NOMBA ACCOUNT ID:", accountId);
+    console.log("NOMBA URL:", `${NOMBA_BASE_URL}${path}`);
+    console.log("NOMBA METHOD:", method);
+    console.log("NOMBA BODY:", body);
+    console.log("NOMBA ACCOUNT ID:", accountId);
 
-  const response = await fetch(`${NOMBA_BASE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      'accountId': accountId,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const data = (await response.json()) as T & { code: string; description: string };
-
-  if (!response.ok || data.code !== '00') {
-    console.error("========== NOMBA ERROR ==========");
-    console.error("STATUS:", response.status);
-    console.error("REQUEST BODY:", body);
-    console.error("RESPONSE:", JSON.stringify(data, null, 2));
-    console.error("=================================");
-    throw new Error(`Nomba API error [${path}]: ${data.description || response.statusText}`);
-  }
-
-  return data;
+    const response = await fetch(`${NOMBA_BASE_URL}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'accountId': accountId,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const rawResponse = await response.text();
+    let data: T & {
+        code: string;
+        description: string;
+    };
+    try {
+        data = JSON.parse(rawResponse);
+    } catch {
+        throw new Error(`Nomba invalid response: ${rawResponse}`);
+    }
+    if (!response.ok || data.code !== '00') {
+      console.error("========== NOMBA ERROR ==========");
+      console.error("STATUS:", response.status);
+      console.error("REQUEST BODY:", body);
+      console.error("RESPONSE:", JSON.stringify(data, null, 2));
+      console.error("=================================");
+      throw new Error(`Nomba API error [${path}]: ${data.description || response.statusText}`);
+    }
+    return data;
 }
 
 // ─── Virtual Accounts ─────────────────────────────────────────────────────────
@@ -126,34 +133,35 @@ export async function createVirtualAccount(params: {
     bvn?: string;
     expectedAmount?: number;
 }): Promise<NombaVirtualAccountResponse['data']> {
-  console.log("CREATE VIRTUAL ACCOUNT REQUEST BODY:", JSON.stringify({
-      accountRef: params.accountRef,
-      accountName: params.accountName,
-      currency: params.currency,
-      bvn: params.bvn,
-      expectedAmount: params.expectedAmount,
-  }, null, 2));
+  
+    console.log("CREATE VIRTUAL ACCOUNT REQUEST BODY:", JSON.stringify({
+        accountRef: params.accountRef,
+        accountName: params.accountName,
+        currency: params.currency,
+        bvn: params.bvn,
+        expectedAmount: params.expectedAmount,
+    }, null, 2));
 
-  const data = await nombaRequest<NombaVirtualAccountResponse>(
-        'POST',
-        '/v1/accounts/virtual',
-        {
-            accountRef: params.accountRef,
-            accountName: params.accountName,
-            currency: params.currency,
-            ...(params.bvn && { bvn: params.bvn }),
-            ...(params.expectedAmount !== undefined && {
-                expectedAmount: params.expectedAmount
-            }),
-        }
-    );
+    const data = await nombaRequest<NombaVirtualAccountResponse>(
+          'POST',
+          '/v1/accounts/virtual',
+          {
+              accountRef: params.accountRef,
+              accountName: params.accountName,
+              currency: params.currency,
+              ...(params.bvn && { bvn: params.bvn }),
+              ...(params.expectedAmount !== undefined && {
+                  expectedAmount: params.expectedAmount
+              }),
+          }
+      );
 
-    console.log(
-        'RAW NOMBA VIRTUAL ACCOUNT RESPONSE:',
-        JSON.stringify(data, null, 2)
-    );
+      console.log(
+          'RAW NOMBA VIRTUAL ACCOUNT RESPONSE:',
+          JSON.stringify(data, null, 2)
+      );
 
-    return data.data;
+      return data.data;
 }
 // ─── Transfers ────────────────────────────────────────────────────────────────
 

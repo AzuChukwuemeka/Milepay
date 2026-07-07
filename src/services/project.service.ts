@@ -166,6 +166,7 @@ export class ProjectService {
           },
       };
   }
+
   async cancelProject(projectId: string, userId: string, reason: string): Promise<void> {
     const project = await projectRepository.findById(projectId);
     if (!project) throw new NotFoundError('Project');
