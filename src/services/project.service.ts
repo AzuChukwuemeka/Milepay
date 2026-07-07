@@ -120,7 +120,7 @@ export class ProjectService {
 
       const providerName = providerResult.rows[0]?.name ?? 'MilePay Project';
 
-      const sanitizedAccountName = '${providerName} ${project.title}'
+      const sanitizedAccountName = `${providerName} ${project.title}`
       .replace(/[^a-zA-Z0-9\s]/g, '')
       .substring(0, 50)
       .trim();
