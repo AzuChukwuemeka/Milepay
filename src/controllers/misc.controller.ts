@@ -64,7 +64,19 @@ export const nombaWebhook = async (req: Request, res: Response, next: NextFuncti
     }
 
     res.status(200).json({ success: true, message: 'Webhook received' });
-    await webhookService.handleInboundPayment(req.body);
+
+    // Nomba sends both inbound virtual-account payments AND payout/transfer
+    // confirmations to the same webhook URL, distinguished by event_type.
+    // These were previously both routed into handleInboundPayment, which
+    // only knows how to reconcile inbound payments — payout_success /
+    // payout_failed events (the confirmation for milestone payouts, see
+    // milestone.service.ts) were silently dropped.
+    const eventType = req.body?.event_type;
+    if (eventType === 'payout_success' || eventType === 'payout_failed') {
+      await webhookService.handlePayoutOutcome(req.body);
+    } else {
+      await webhookService.handleInboundPayment(req.body);
+    }
   } catch (err) {
     console.error('Webhook processing error:', err);
   }

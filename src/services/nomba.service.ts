@@ -197,6 +197,26 @@ export async function fetchBanks(): Promise<Array<{ code: string; name: string; 
   }
 }
 
+// ─── Bank Transfers (payouts) ──────────────────────────────────────────────────
+//
+// IMPORTANT: POST /v2/transfers/bank is NOT a synchronous "did the money move"
+// call. Per developer.nomba.com/docs/products/transfers/transfer-to-banks, a
+// non-error HTTP response only means Nomba *accepted* the request; the final
+// outcome (SUCCESS or REFUND) is authoritative only via the payout_success /
+// payout_failed webhook (or a requery call). A response with data.status of
+// PENDING_BILLING or NEW must be treated as "still processing", not "paid".
+// This also means the transfer endpoint doesn't follow the `code === '00'`
+// success convention used by every other Nomba endpoint here — Nomba's own
+// docs show successful transfers returning code "200", and a 201 HTTP status
+// specifically means "processing, rely on the webhook" rather than an error.
+// Because of that, this function does its own request/response handling
+// instead of going through the shared `nombaRequest` helper, which would
+// incorrectly throw on a perfectly healthy in-flight transfer.
+export type TransferOutcome =
+  | { outcome: 'SUCCESS'; data: NombaTransferResponse['data'] }
+  | { outcome: 'PENDING'; data: NombaTransferResponse['data'] }
+  | { outcome: 'FAILED'; reason: string };
+
 export async function initiateTransfer(params: {
   amount: number;
   bankCode: string;
@@ -204,11 +224,17 @@ export async function initiateTransfer(params: {
   accountName: string;
   narration: string;
   idempotencyKey: string;
-}): Promise<NombaTransferResponse['data']> {
-  const data = await nombaRequest<NombaTransferResponse>(
-    'POST',
-    '/v2/transfers/bank',
-    {
+}): Promise<TransferOutcome> {
+  const token = await getNombaToken();
+
+  const response = await fetch(`${NOMBA_BASE_URL}/v2/transfers/bank`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'accountId': PARENT_ACCOUNT_ID,
+    },
+    body: JSON.stringify({
       amount: params.amount,
       accountNumber: params.accountNumber,
       accountName: params.accountName,
@@ -216,9 +242,45 @@ export async function initiateTransfer(params: {
       merchantTxRef: params.idempotencyKey,
       senderName: params.accountName,
       narration: params.narration,
-    }
-  );
-  return data.data;
+    }),
+  });
+
+  const rawResponse = await response.text();
+  let parsed: NombaTransferResponse;
+  try {
+    parsed = JSON.parse(rawResponse);
+  } catch {
+    return { outcome: 'FAILED', reason: `Nomba invalid transfer response: ${rawResponse}` };
+  }
+
+  console.log('NOMBA TRANSFER RESPONSE:', JSON.stringify(parsed, null, 2));
+
+  const status = parsed?.data?.status;
+
+  // 201 = "Unable to process response, please rely on webhook" — explicitly
+  // documented as a pending state, not an error, even though it's a non-2xx-ish
+  // marker in Nomba's own examples.
+  if (response.status === 201 || status === 'PENDING_BILLING' || status === 'NEW') {
+    return { outcome: 'PENDING', data: parsed.data };
+  }
+
+  if (status === 'REFUND') {
+    return { outcome: 'FAILED', reason: `Transfer refunded by Nomba (id: ${parsed.data?.id})` };
+  }
+
+  if (!response.ok) {
+    return { outcome: 'FAILED', reason: parsed?.description || response.statusText };
+  }
+
+  if (status === 'SUCCESS') {
+    return { outcome: 'SUCCESS', data: parsed.data };
+  }
+
+  // Unknown/unexpected status: Nomba's own guidance is "treat unknown
+  // responses as PENDING" and let the webhook / requery resolve it, rather
+  // than guessing it succeeded or failed.
+  console.warn(`Unexpected Nomba transfer status "${status}" — treating as PENDING`);
+  return { outcome: 'PENDING', data: parsed.data };
 }
 
 // ─── Bank Account Resolution ──────────────────────────────────────────────────

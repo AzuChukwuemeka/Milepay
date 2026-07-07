@@ -7,7 +7,7 @@ import { sendEmail } from './email.service';
 import { Milestone, Dispute } from '../types';
 import pool from '../config/database';
 
-const PLATFORM_FEE_PERCENT = 0.02; // 2%
+export const PLATFORM_FEE_PERCENT = 0.02; // 2%
 const MAX_TRANSFER_ATTEMPTS = 3;
 
 export class MilestoneService {
@@ -130,48 +130,43 @@ export class MilestoneService {
         idempotencyKey: `MPAY-${milestoneId}`,
       });
 
-      await milestoneRepository.setPaid(milestoneId, transfer.id);
-
-      // Unlock next milestone
-      const nextMilestone = await milestoneRepository.findNextMilestone(projectId, milestone.order_index);
-      if (nextMilestone) {
-        await milestoneRepository.updateState(nextMilestone.id, 'IN_PROGRESS');
-        await auditRepository.log({
-          projectId,
-          milestoneId: nextMilestone.id,
-          eventType: 'MILESTONE_UNLOCKED',
-          metadata: { previousMilestoneId: milestoneId },
-        });
-      } else {
-        // All milestones paid — complete project
-        await projectRepository.updateState(projectId, 'COMPLETED');
-        await auditRepository.log({
-          projectId,
-          eventType: 'PROJECT_COMPLETED',
-          metadata: { finalMilestoneId: milestoneId },
-        });
+      if (transfer.outcome === 'FAILED') {
+        // Nomba responded, but rejected/refunded the transfer outright (e.g.
+        // REFUND status, or a hard error). Treat exactly like a thrown error
+        // so the existing retry/alert logic below runs.
+        throw new Error(transfer.reason);
       }
 
-      await notificationRepository.create({
-        userId: project.provider_id,
-        title: 'Milestone Payment Released',
-        message: `₦${transferAmount.toLocaleString()} has been sent to your bank account for "${milestone.title}".`,
-        type: 'MILESTONE_PAID',
-        metadata: { projectId, milestoneId, amount: transferAmount },
-      });
+      if (transfer.outcome === 'PENDING') {
+        // Nomba accepted the request but hasn't confirmed the outcome yet
+        // (data.status = PENDING_BILLING / NEW). This is NOT a success: do
+        // NOT mark the milestone paid, unlock the next milestone, or tell the
+        // provider money has landed. Persist the transfer id so (a) the retry
+        // cron knows not to re-fire this (see findPendingTransfers), and (b)
+        // we have it on hand for reconciliation. The payout_success /
+        // payout_failed webhook (see webhook.service.ts) finalizes this.
+        await milestoneRepository.setTransferRef(milestoneId, transfer.data.id);
 
-      await auditRepository.log({
-        projectId,
-        milestoneId,
-        eventType: 'TRANSFER_SUCCESSFUL',
-        metadata: { transferRef: transfer.transactionRef, amount: transferAmount, fee: platformFee },
-      });
+        await auditRepository.log({
+          projectId,
+          milestoneId,
+          eventType: 'TRANSFER_PROCESSING',
+          metadata: { transferRef: transfer.data.id, status: transfer.data.status, amount: transferAmount },
+        });
 
-      await sendEmail({
-        to: provider.email,
-        subject: `Payment Released: ${milestone.title}`,
-        html: `<p>Hi ${provider.name},</p><p>₦${transferAmount.toLocaleString()} has been released to your bank account for milestone: <strong>${milestone.title}</strong>.</p>`,
-      });
+        await notificationRepository.create({
+          userId: project.provider_id,
+          title: 'Payment Processing',
+          message: `Your payment of ₦${transferAmount.toLocaleString()} for "${milestone.title}" is being processed and will land shortly.`,
+          type: 'MILESTONE_PAYMENT_PROCESSING',
+          metadata: { projectId, milestoneId, amount: transferAmount },
+        });
+
+        return;
+      }
+
+      // outcome === 'SUCCESS'
+      await this.finalizeMilestonePayment(project, milestone, transfer.data.id, transferAmount, platformFee);
 
     } catch (error) {
       console.error(`Transfer attempt ${attempts} failed for milestone ${milestoneId}:`, error);
@@ -201,9 +196,120 @@ export class MilestoneService {
           metadata: { projectId, milestoneId },
         });
       } else {
-        // Schedule retry (cron will pick it up via APPROVED_PENDING_TRANSFER state)
+        // Make sure there's no stale transfer ref blocking the retry cron
+        // (findPendingTransfers only retries when nomba_transfer_ref IS NULL).
+        await milestoneRepository.clearTransferRef(milestoneId);
         await milestoneRepository.updateState(milestoneId, 'APPROVED_PENDING_TRANSFER');
       }
+    }
+  }
+
+  // Shared "the transfer is definitely done" path — called either immediately
+  // (initiateTransfer returned outcome SUCCESS) or later, from the
+  // payout_success webhook, once Nomba confirms a previously PENDING transfer
+  // completed. Marks the milestone paid, unlocks the next milestone (or
+  // completes the project), and notifies/emails the provider.
+  async finalizeMilestonePayment(
+    project: { id: string; title: string; provider_id: string },
+    milestone: { id: string; title: string; order_index: number },
+    transferRef: string,
+    transferAmount: number,
+    platformFee: number
+  ): Promise<void> {
+    const projectId = project.id;
+    const milestoneId = milestone.id;
+
+    await milestoneRepository.setPaid(milestoneId, transferRef);
+
+    // Unlock next milestone
+    const nextMilestone = await milestoneRepository.findNextMilestone(projectId, milestone.order_index);
+    if (nextMilestone) {
+      await milestoneRepository.updateState(nextMilestone.id, 'IN_PROGRESS');
+      await auditRepository.log({
+        projectId,
+        milestoneId: nextMilestone.id,
+        eventType: 'MILESTONE_UNLOCKED',
+        metadata: { previousMilestoneId: milestoneId },
+      });
+    } else {
+      // All milestones paid — complete project
+      await projectRepository.updateState(projectId, 'COMPLETED');
+      await auditRepository.log({
+        projectId,
+        eventType: 'PROJECT_COMPLETED',
+        metadata: { finalMilestoneId: milestoneId },
+      });
+    }
+
+    await notificationRepository.create({
+      userId: project.provider_id,
+      title: 'Milestone Payment Released',
+      message: `₦${transferAmount.toLocaleString()} has been sent to your bank account for "${milestone.title}".`,
+      type: 'MILESTONE_PAID',
+      metadata: { projectId, milestoneId, amount: transferAmount },
+    });
+
+    await auditRepository.log({
+      projectId,
+      milestoneId,
+      eventType: 'TRANSFER_SUCCESSFUL',
+      metadata: { transferRef, amount: transferAmount, fee: platformFee },
+    });
+
+    const providerResult = await pool.query(
+      `SELECT u.email, u.name FROM provider_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.user_id = $1`,
+      [project.provider_id]
+    );
+    const provider = providerResult.rows[0];
+
+    if (provider?.email) {
+      await sendEmail({
+        to: provider.email,
+        subject: `Payment Released: ${milestone.title}`,
+        html: `<p>Hi ${provider.name},</p><p>₦${transferAmount.toLocaleString()} has been released to your bank account for milestone: <strong>${milestone.title}</strong>.</p>`,
+      });
+    }
+  }
+
+  // Called from the payout_failed webhook when Nomba confirms a
+  // previously-PENDING transfer was refunded/failed. Clears the stale
+  // transfer ref (so the retry cron can safely pick it back up with the same
+  // idempotency key) and alerts the admin/provider once attempts are
+  // exhausted, mirroring the synchronous failure path above.
+  async handleTransferFailure(
+    project: { id: string; title: string; provider_id: string },
+    milestone: { id: string; title: string; transfer_attempts: number },
+    reason: string
+  ): Promise<void> {
+    const projectId = project.id;
+    const milestoneId = milestone.id;
+
+    await auditRepository.log({
+      projectId,
+      milestoneId,
+      eventType: 'TRANSFER_FAILED',
+      metadata: { attempt: milestone.transfer_attempts, error: reason, source: 'payout_failed_webhook' },
+    });
+
+    if (milestone.transfer_attempts >= MAX_TRANSFER_ATTEMPTS) {
+      await notificationRepository.create({
+        userId: await this.getAdminId(),
+        title: 'Transfer Failed - Manual Action Required',
+        message: `Milestone "${milestone.title}" transfer failed after ${milestone.transfer_attempts} attempts: ${reason}`,
+        type: 'TRANSFER_FAILED_ADMIN',
+        metadata: { projectId, milestoneId, attempts: milestone.transfer_attempts },
+      });
+
+      await notificationRepository.create({
+        userId: project.provider_id,
+        title: 'Payment Delayed',
+        message: `Your payment for "${milestone.title}" is temporarily delayed. Our team is resolving this.`,
+        type: 'TRANSFER_DELAYED',
+        metadata: { projectId, milestoneId },
+      });
+    } else {
+      await milestoneRepository.clearTransferRef(milestoneId);
+      await milestoneRepository.updateState(milestoneId, 'APPROVED_PENDING_TRANSFER');
     }
   }
 

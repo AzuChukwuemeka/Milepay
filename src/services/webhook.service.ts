@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { projectRepository } from '../repositories/project.repository';
 import { milestoneRepository } from '../repositories/milestone.repository';
 import { auditRepository, notificationRepository, paymentRepository } from '../repositories/shared.repository';
+import { milestoneService, PLATFORM_FEE_PERCENT } from './milestone.service';
 import { NombaWebhookPayload } from '../types';
 
 export class WebhookService {
@@ -54,9 +55,14 @@ export class WebhookService {
 
     await paymentRepository.markEventProcessed(eventId);
 
-    const { transaction, virtualAccount } = payload.data;
+    const { transaction } = payload.data;
     const amount = transaction.transactionAmount;
-    const accountNumber = virtualAccount?.accountNumber;
+    const accountNumber = transaction.aliasAccountNumber;
+
+    if (amount === undefined) {
+      console.warn('Inbound payment webhook missing transaction.transactionAmount — ignoring');
+      return;
+    }
 
     if (!accountNumber) {
       console.warn('Webhook missing virtualAccount.accountNumber');
@@ -198,6 +204,72 @@ export class WebhookService {
         type: 'PROJECT_FUNDED',
         metadata: { projectId: project.id },
       });
+    }
+  }
+
+  // Handles payout_success / payout_failed events — these are the
+  // authoritative confirmation for transfers initiated via
+  // POST /v2/transfers/bank that came back PENDING_BILLING/NEW (see
+  // nomba.service.ts / milestone.service.ts). Without this, a payout that
+  // Nomba later refunds would silently leave a milestone marked in-progress
+  // forever (or, before this fix, would already have been marked PAID
+  // prematurely).
+  //
+  // Correlates the webhook back to a milestone via `merchantTxRef`, which we
+  // control and set to `MPAY-${milestoneId}` when initiating the transfer.
+  async handlePayoutOutcome(payload: NombaWebhookPayload): Promise<void> {
+    const eventId = payload.requestId;
+
+    const alreadyProcessed = await paymentRepository.isEventProcessed(eventId);
+    if (alreadyProcessed) {
+      console.log(`Webhook event ${eventId} already processed — skipping`);
+      return;
+    }
+    await paymentRepository.markEventProcessed(eventId);
+
+    const merchantTxRef = payload.data?.transaction?.merchantTxRef ?? '';
+    const MILESTONE_REF_PREFIX = 'MPAY-';
+
+    if (!merchantTxRef.startsWith(MILESTONE_REF_PREFIX)) {
+      console.warn(`Payout webhook merchantTxRef "${merchantTxRef}" doesn't match a known milestone reference — ignoring`);
+      return;
+    }
+
+    const milestoneId = merchantTxRef.slice(MILESTONE_REF_PREFIX.length);
+    const milestone = await milestoneRepository.findById(milestoneId);
+    if (!milestone) {
+      console.warn(`Payout webhook referenced unknown milestone ${milestoneId}`);
+      return;
+    }
+
+    // Idempotent: if we already finalized this milestone (e.g. the
+    // synchronous call already returned SUCCESS, or a duplicate webhook
+    // delivery), there's nothing further to do.
+    if (milestone.state === 'PAID') {
+      console.log(`Milestone ${milestoneId} already marked PAID — ignoring duplicate payout webhook`);
+      return;
+    }
+
+    const project = await projectRepository.findById(milestone.project_id);
+    if (!project) {
+      console.warn(`Payout webhook referenced milestone ${milestoneId} with no matching project`);
+      return;
+    }
+
+    if (payload.event_type === 'payout_success') {
+      const transactionId = payload.data.transaction.transactionId;
+      const platformFee = milestone.amount * PLATFORM_FEE_PERCENT;
+      const transferAmount = milestone.amount - platformFee;
+      await milestoneService.finalizeMilestonePayment(
+        project,
+        milestone,
+        transactionId,
+        transferAmount,
+        platformFee
+      );
+    } else if (payload.event_type === 'payout_failed') {
+      const reason = payload.data.transaction.responseCode || 'Payout failed/refunded by Nomba';
+      await milestoneService.handleTransferFailure(project, milestone, reason);
     }
   }
 

@@ -92,6 +92,30 @@ export class MilestoneRepository {
     );
   }
 
+  // Records that Nomba has *accepted* a transfer and is processing it
+  // (data.status = PENDING_BILLING / NEW), without marking the milestone as
+  // paid. Deliberately does NOT change `state` — it stays in
+  // APPROVED_PENDING_TRANSFER — but setting nomba_transfer_ref lets
+  // findPendingTransfers() below distinguish "never successfully reached
+  // Nomba yet" (safe to retry) from "Nomba is already processing this, wait
+  // for the webhook" (must NOT retry, or we risk a duplicate payout).
+  async setTransferRef(id: string, transferRef: string): Promise<void> {
+    await pool.query(
+      `UPDATE milestones SET nomba_transfer_ref = $1 WHERE id = $2`,
+      [transferRef, id]
+    );
+  }
+
+  // Clears a stale transfer ref after Nomba confirms (via webhook) that a
+  // transfer was refunded/failed, so the next cron pass is allowed to retry
+  // with a fresh attempt.
+  async clearTransferRef(id: string): Promise<void> {
+    await pool.query(
+      `UPDATE milestones SET nomba_transfer_ref = NULL WHERE id = $1`,
+      [id]
+    );
+  }
+
   async incrementTransferAttempts(id: string): Promise<number> {
     const result = await pool.query<{ transfer_attempts: number }>(
       `UPDATE milestones SET transfer_attempts = transfer_attempts + 1 WHERE id = $1 RETURNING transfer_attempts`,
@@ -107,9 +131,15 @@ export class MilestoneRepository {
     return result.rows;
   }
 
+  // Only returns milestones that never got a transfer ref back from Nomba —
+  // i.e. the previous attempt errored before or during the API call, or a
+  // prior attempt was confirmed REFUNDED and had its ref cleared. Milestones
+  // with a nomba_transfer_ref already set are being processed by Nomba and
+  // must wait for the payout_success/payout_failed webhook, NOT be retried
+  // here (retrying an in-flight transfer risks a duplicate payout).
   async findPendingTransfers(): Promise<Milestone[]> {
     const result = await pool.query<Milestone>(
-      `SELECT * FROM milestones WHERE state = 'APPROVED_PENDING_TRANSFER'`
+      `SELECT * FROM milestones WHERE state = 'APPROVED_PENDING_TRANSFER' AND nomba_transfer_ref IS NULL`
     );
     return result.rows;
   }

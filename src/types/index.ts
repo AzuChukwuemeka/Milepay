@@ -212,20 +212,44 @@ export interface NombaVirtualAccountResponse {
         bankName: string;
         bankAccountNumber: string;
         bankAccountName: string;
+        // Per developer.nomba.com/nomba-api-reference/virtual-accounts/create-virtual-account,
+        // these are only present when supplied at creation / when set on the account.
+        bvn?: string;
+        callbackUrl?: string;
         accountHolderId?: string;
         createdAt?: string;
         expired?: boolean;
     };
 }
 
+// Per developer.nomba.com/docs/products/transfers/transfer-to-banks:
+// POST /v2/transfers/bank does NOT resolve to a final outcome synchronously.
+// `data.status` can be SUCCESS, PENDING_BILLING, NEW, or REFUND — a non-error
+// HTTP response is NOT the same as "the money has moved". Only status ===
+// 'SUCCESS' (confirmed immediately or later via the payout_success /
+// payout_failed webhook) means the transfer is final. Nomba's own "immediate"
+// example responses only contain `id` and `status` — amount/fee/meta/
+// timeCreated are not guaranteed on every response shape, so they're optional.
+export type NombaTransferStatus = 'SUCCESS' | 'PENDING_BILLING' | 'NEW' | 'REFUND';
+
 export interface NombaTransferResponse {
   code: string;
   description: string;
   data: {
     id: string;
-    transactionRef?: string;
-    status: string;
-    amount: number;
+    status: NombaTransferStatus | string;
+    type?: string;
+    amount?: number;
+    fee?: number;
+    source?: string;
+    timeCreated?: string;
+    meta?: {
+      merchantTxRef?: string;
+      api_client_id?: string;
+      api_account_id?: string;
+      rrn?: string;
+      [key: string]: unknown;
+    };
   };
 }
 
@@ -233,15 +257,25 @@ export interface NombaWebhookPayload {
   event_type: 'payment_success' | 'payment_failed' | 'payout_success' | 'payout_failed';
   requestId: string;
   data: {
-    merchant: { userId: string; walletId?: string };
+    merchant: { userId: string; walletId?: string; walletBalance?: number };
     transaction: {
-      fee: number;
-      type: string;
       transactionId: string;
-      merchantTxRef: string;
+      type: string;
       transactionAmount: number;
+      aliasAccountNumber?: string;
+      aliasAccountName?: string;
+      aliasAccountType?: string;
       time: string;
       responseCode?: string;
+      fee?: number;
+      // Only present on payout/transfer-originated webhooks — this is the
+      // merchantTxRef we supplied to POST /v2/transfers/bank, used to
+      // correlate a payout_success/payout_failed event back to a milestone.
+      merchantTxRef?: string;
+    };
+    customer?: {
+      senderName?: string;
+      [key: string]: unknown;
     };
     order?: {
       amount: number;
@@ -252,11 +286,6 @@ export interface NombaWebhookPayload {
       paymentMethod: string;
       currency: string;
     };
-    virtualAccount?: {
-      accountNumber: string;
-      accountRef: string;
-      amount: number;
-    };
   };
 }
 
@@ -266,7 +295,12 @@ export interface NombaBankResolveResponse {
   data: {
     accountName: string;
     accountNumber: string;
-    bankCode: string;
+    // NOTE: developer.nomba.com/docs/products/transfers/bank-account-lookup
+    // documents the response data object as ONLY { accountNumber, accountName }.
+    // Nomba does not echo bankCode back — keep this optional so callers don't
+    // assume it's populated. Use the bankCode you sent in the request instead
+    // (misc.controller.ts already does this correctly).
+    bankCode?: string;
   };
 }
 
