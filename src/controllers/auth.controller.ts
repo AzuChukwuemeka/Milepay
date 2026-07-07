@@ -137,11 +137,13 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
  *         description: Invalid or expired token
  */
 export const verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const frontendSignInUrl = "https://milepay-nomba.vercel.app"
   try {
     const { token } = req.body;
     if (!token) { sendError(res, 400, 'VALIDATION_ERROR', 'Token is required', 'token'); return; }
     await authService.verifyEmail(token);
-    sendSuccess(res, { success: true }, 'Email verified successfully');
+    res.redirect(`${frontendSignInUrl}/login`);
+    // sendSuccess(res, { success: true }, 'Email verified successfully');
   } catch (err) {
     next(err);
   }
