@@ -564,11 +564,18 @@ export const bankLookup = async (req: Request, res: Response, next: NextFunction
 export const getBanks = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const banks = await fetchBanks();
+    console.log('BANKS COUNT:', banks?.length, 'SAMPLE:', JSON.stringify(banks?.[0]));
+    if (!banks || banks.length === 0) {
+      // Fallback
+      const fallback = Object.entries(NIGERIAN_BANKS).map(([code, name]) => ({ code, name }));
+      sendSuccess(res, fallback);
+      return;
+    }
     sendSuccess(res, banks);
-  } catch {
-    // Fallback to hardcoded list if Nomba call fails
-    const banks = Object.entries(NIGERIAN_BANKS).map(([code, name]) => ({ code, name }));
-    sendSuccess(res, banks);
+  } catch (err) {
+    console.error('GET BANKS ERROR:', err);
+    const fallback = Object.entries(NIGERIAN_BANKS).map(([code, name]) => ({ code, name }));
+    sendSuccess(res, fallback);
   }
 };
 
