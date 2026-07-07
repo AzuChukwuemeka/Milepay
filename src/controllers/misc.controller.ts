@@ -52,36 +52,83 @@ const NIGERIAN_BANKS: Record<string, string> = {
  *       200:
  *         description: Webhook acknowledged
  */
-export const nombaWebhook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const nombaWebhook = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const signature = (req.headers['nomba-signature'] || req.headers['x-nomba-signature']) as string;
-    const timestamp = (req.headers['nomba-timestamp'] || req.headers['x-nomba-timestamp']) as string;
+    const signature = (req.headers['nomba-signature'] ||
+      req.headers['x-nomba-signature']) as string;
+
+    const timestamp = (req.headers['nomba-timestamp'] ||
+      req.headers['x-nomba-timestamp']) as string;
+
     const rawBody = (req as any).rawBody ?? JSON.stringify(req.body);
 
-    if (!webhookService.verifySignature(rawBody, signature, timestamp)) {
-      sendError(res, 401, 'INVALID_SIGNATURE', 'Webhook signature verification failed');
+    console.log("========== NOMBA WEBHOOK RECEIVED ==========");
+    console.log("Headers:", {
+      signature,
+      timestamp,
+    });
+    console.log("Raw Body:", rawBody);
+    console.log("Parsed Body:", JSON.stringify(req.body, null, 2));
+    console.log("============================================");
+
+    const isValid = webhookService.verifySignature(
+      rawBody,
+      signature,
+      timestamp
+    );
+
+    console.log("Signature Valid:", isValid);
+
+    if (!isValid) {
+      console.error("Webhook signature verification failed.");
+      sendError(
+        res,
+        401,
+        'INVALID_SIGNATURE',
+        'Webhook signature verification failed'
+      );
       return;
     }
 
-    res.status(200).json({ success: true, message: 'Webhook received' });
+    // Respond immediately so Nomba doesn't retry
+    res.status(200).json({
+      success: true,
+      message: 'Webhook received',
+    });
 
-    // Nomba sends both inbound virtual-account payments AND payout/transfer
-    // confirmations to the same webhook URL, distinguished by event_type.
-    // These were previously both routed into handleInboundPayment, which
-    // only knows how to reconcile inbound payments — payout_success /
-    // payout_failed events (the confirmation for milestone payouts, see
-    // milestone.service.ts) were silently dropped.
     const eventType = req.body?.event_type;
-    if (eventType === 'payout_success' || eventType === 'payout_failed') {
-      await webhookService.handlePayoutOutcome(req.body);
-    } else {
-      await webhookService.handleInboundPayment(req.body);
+
+    console.log("Webhook Event Type:", eventType);
+
+    switch (eventType) {
+      case 'payout_success':
+      case 'payout_failed':
+        console.log("Processing payout webhook...");
+        await webhookService.handlePayoutOutcome(req.body);
+        console.log("Payout webhook processed successfully.");
+        break;
+
+      default:
+        console.log("Processing inbound payment webhook...");
+        await webhookService.handleInboundPayment(req.body);
+        console.log("Inbound payment processed successfully.");
+        break;
     }
+
+    console.log("========== WEBHOOK COMPLETE ==========");
+
   } catch (err) {
-    console.error('Webhook processing error:', err);
+    console.error("========== WEBHOOK ERROR ==========");
+    console.error(err);
+    console.error("===================================");
+
+    next(err);
   }
 };
-
 // ─── Onboarding Controllers ───────────────────────────────────────────────────
 
 /**
