@@ -1,7 +1,7 @@
 import crypto from 'crypto';
+import { auditRepository, notificationRepository, paymentRepository, clientRepository } from '../repositories/shared.repository';
 import { projectRepository } from '../repositories/project.repository';
 import { milestoneRepository } from '../repositories/milestone.repository';
-import { auditRepository, notificationRepository, paymentRepository } from '../repositories/shared.repository';
 import { milestoneService, PLATFORM_FEE_PERCENT } from './milestone.service';
 import { NombaWebhookPayload } from '../types';
 
@@ -112,6 +112,20 @@ export class WebhookService {
       status: 'MATCHED',
       rawPayload: payload as unknown as Record<string, unknown>,
     });
+
+    // Capture the client's own bank account off the webhook for future
+    // reconciliation/refunds. Guarded on two things that can each be absent
+    // independently: the project may not have a client_id yet (matched via
+    // client_email only), and Nomba doesn't always include the `customer`
+    // object depending on payment channel.
+    if (project.client_id && payload.data.customer) {
+      await clientRepository.upsertBankDetails(project.client_id, {
+        bankCode: payload.data.customer.bankCode,
+        bankName: payload.data.customer.bankName,
+        accountNumber: payload.data.customer.accountNumber,
+        accountName: payload.data.customer.senderName,
+      });
+    }
 
     const newAmountPaid = Number(project.amount_paid) + amount;
     const totalRequired = Number(project.total_amount);

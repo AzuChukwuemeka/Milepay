@@ -19,6 +19,8 @@ export class AuditRepository {
     );
   }
 
+
+  
   async findByProjectId(projectId: string): Promise<AuditEvent[]> {
     const result = await pool.query<AuditEvent>(
       `SELECT * FROM audit_events WHERE project_id = $1 ORDER BY created_at ASC`,
@@ -210,6 +212,30 @@ export class DisputeRepository {
   }
 }
 
+// ─── Client Repository ────────────────────────────────────────────────────────
+
+export class ClientRepository {
+  // Called from the payment_success webhook once we know which project (and
+  // therefore which client) a payment belongs to. Nomba's `customer` object
+  // gives us the sender's own bank account — the account we'd pay a refund
+  // back to. Any of these can be missing depending on payment channel, so
+  // every field is written as-is (possibly null) rather than assumed present.
+  // Overwrites on every payment so the account on file is always the most
+  // recently used one.
+  async upsertBankDetails(
+    userId: string,
+    data: { bankCode?: string; bankName?: string; accountNumber?: string; accountName?: string }
+  ): Promise<void> {
+    await pool.query(
+      `UPDATE client_profiles
+       SET bank_code = $1, bank_name = $2, account_number = $3, account_name = $4
+       WHERE user_id = $5`,
+      [data.bankCode ?? null, data.bankName ?? null, data.accountNumber ?? null, data.accountName ?? null, userId]
+    );
+  }
+}
+
+export const clientRepository = new ClientRepository();
 export const auditRepository = new AuditRepository();
 export const notificationRepository = new NotificationRepository();
 export const paymentRepository = new PaymentRepository();

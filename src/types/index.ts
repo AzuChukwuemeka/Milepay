@@ -273,8 +273,15 @@ export interface NombaWebhookPayload {
       // correlate a payout_success/payout_failed event back to a milestone.
       merchantTxRef?: string;
     };
+// Per developer.nomba.com/products/webhooks/introduction — the
+    // payment_success example payload returns the *sender's* (i.e. our
+    // client's) own bank details here, not the merchant's. This is what we
+    // persist to client_profiles for reconciliation/refund purposes.
     customer?: {
       senderName?: string;
+      bankCode?: string;
+      bankName?: string;
+      accountNumber?: string;
       [key: string]: unknown;
     };
     order?: {
