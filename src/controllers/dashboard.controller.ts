@@ -212,7 +212,7 @@ export const clientDashboard = async (req: Request, res: Response, next: NextFun
       `SELECT
         COUNT(DISTINCT CASE WHEN p.state = 'ACTIVE' THEN p.id END) AS active_projects,
         COUNT(DISTINCT CASE WHEN p.state = 'COMPLETED' THEN p.id END) AS completed_projects,
-        COALESCE(SUM(DISTINCT CASE WHEN p.state = 'COMPLETED' THEN p.total_amount ELSE 0 END), 0) AS total_spent,
+        COALESCE(SUM(CASE WHEN m.state = 'PAID' THEN m.amount ELSE 0 END), 0) AS total_spent,        
         COUNT(CASE WHEN m.state = 'SUBMITTED' THEN 1 END) AS pending_approvals
        FROM projects p
        LEFT JOIN milestones m ON m.project_id = p.id
@@ -354,11 +354,23 @@ export const adminDashboard = async (req: Request, res: Response, next: NextFunc
     );
 
     const projectStatsResult = await pool.query(
-      `SELECT
-        COUNT(CASE WHEN state = 'ACTIVE' THEN 1 END) AS active_projects,
-        COUNT(CASE WHEN state = 'COMPLETED' THEN 1 END) AS completed_projects,
-        COALESCE(SUM(CASE WHEN state = 'COMPLETED' THEN total_amount ELSE 0 END), 0) AS total_volume
-       FROM projects`
+
+        `SELECT
+            COUNT(DISTINCT CASE WHEN p.state = 'ACTIVE' THEN p.id END) AS active_projects,
+            COUNT(DISTINCT CASE WHEN p.state = 'COMPLETED' THEN p.id END) AS completed_projects,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN m.state = 'PAID'
+                        THEN m.amount
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS total_volume
+        FROM projects p
+        LEFT JOIN milestones m
+      ON m.project_id = p.id`
     );
 
     const disputeStatsResult = await pool.query(
