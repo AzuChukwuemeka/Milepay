@@ -6,6 +6,45 @@ export const sendSuccess = <T>(res: Response, data: T, message?: string, statusC
   res.status(statusCode).json(response);
 };
 
+export const sendSuccessEmailVerifyPage = <T>(res: Response, data: T, message?: string, statusCode = 200): void => {
+  const frontendSignInUrl = "https://milepay-nomba.vercel.app/login"
+  const response: ApiSuccess<T> = { success: true, data, ...(message && { message }) };
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Email Verified</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding-top: 80px;
+          }
+
+          a {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+          }
+        </style>
+      </head>
+
+      <body>
+        <h1>Milepay Verification Successful</h1>
+        <p>Your email has been verified. You can now sign in.</p>
+        <a href="${frontendSignInUrl}/login">
+          Go back to Login
+        </a>
+      </body>
+    </html>
+  `);
+};
+
+
 export const sendError = (
   res: Response,
   statusCode: number,
