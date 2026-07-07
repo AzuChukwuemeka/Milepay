@@ -27,14 +27,40 @@ router.get('/verify-email', async (req, res) => {
       return;
     }
     await authService.verifyEmail(token as string);
-    res.send(`
-      <html>
-        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-          <h2>Email Verified Successfully</h2>
-          <p>Your MilePay account is now active. You can close this tab.</p>
-        </body>
-      </html>
-    `);
+    const frontendSignInUrl = "https://milepay-nomba.vercel.app/login"
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Email Verified</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding-top: 80px;
+          }
+
+          a {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+          }
+        </style>
+      </head>
+
+      <body>
+        <h1>Milepay Verification Successful</h1>
+        <p>Your email has been verified. You can now sign in.</p>
+        <a href="${frontendSignInUrl}/login">
+          Go back to Login
+        </a>
+      </body>
+    </html>
+  `);
   } catch {
     res.status(400).send(`
       <html>
