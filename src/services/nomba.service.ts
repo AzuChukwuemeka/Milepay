@@ -158,11 +158,20 @@ export async function createVirtualAccount(params: {
 // ─── Transfers ────────────────────────────────────────────────────────────────
 
 export async function fetchBanks(): Promise<Array<{ code: string; name: string }>> {
-  const data = await nombaRequest<{ code: string; data: { results: Array<{ code: string; name: string }> } }>(
-    'GET',
-    '/v1/transfers/banks'
-  );
-  return data.data.results;
+  try {
+    const data = await nombaRequest<{ 
+      code: string; 
+      data: { results: Array<{ code: string; name: string }> } 
+    }>(
+      'GET',
+      '/v1/transfers/banks'
+    );
+    console.log('FETCH BANKS RESPONSE:', JSON.stringify(data));
+    return data.data.results;
+  } catch (err) {
+    console.error('FETCH BANKS ERROR:', err);
+    throw err;
+  }
 }
 
 export async function initiateTransfer(params: {
