@@ -144,7 +144,7 @@ export async function createVirtualAccount(params: {
 
     const data = await nombaRequest<NombaVirtualAccountResponse>(
           'POST',
-          '/v1/accounts/virtual',
+          `/v1/accounts/virtual/${SUB_ACCOUNT_ID}`,
           {
               accountRef: params.accountRef,
               accountName: params.accountName,
