@@ -39,6 +39,73 @@ const NIGERIAN_BANKS: Record<string, string> = {
   '090405': 'Nomba',
 };
 
+// ─── Generic File Upload (Cloudinary) ─────────────────────────────────────────
+
+/**
+ * @swagger
+ * /upload:
+ *   post:
+ *     tags: [Uploads]
+ *     summary: Upload a single file to Cloudinary and get back its URL
+ *     description: Generic upload endpoint. Used by the frontend to upload milestone delivery files (or any other file) to Cloudinary before submitting the URL to another endpoint (e.g. milestone submit's `deliveryFiles` array).
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: JPG, PNG or PDF file, max 5MB
+ *               folder:
+ *                 type: string
+ *                 description: Optional Cloudinary subfolder (defaults to "deliveries")
+ *     responses:
+ *       200:
+ *         description: File uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     url:
+ *                       type: string
+ *                       example: "https://res.cloudinary.com/.../milepay/deliveries/abc-123.pdf"
+ *       400:
+ *         description: No file provided or invalid file type
+ */
+export const uploadFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const file = req.file;
+
+    if (!file) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'No file provided. Attach a file under the "file" field.');
+      return;
+    }
+
+    const folder = (req.body?.folder as string) || 'deliveries';
+    const safeFolder = folder.replace(/[^a-zA-Z0-9_-]/g, '') || 'deliveries';
+    const filename = `${req.user!.userId}-${Date.now()}`;
+
+    const url = await uploadToCloudinary(file.buffer, safeFolder, filename);
+
+    sendSuccess(res, { url }, 'File uploaded successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Webhook Controller ───────────────────────────────────────────────────────
 
 /**

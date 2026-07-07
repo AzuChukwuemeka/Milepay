@@ -164,6 +164,9 @@ router.post('/onboarding/client/confirm', authenticate, requireRole('client'), m
 router.post('/banks/lookup', misc.bankLookup);
 router.get('/banks', misc.getBanks);
 
+// ─── Generic Upload (Cloudinary) ──────────────────────────────────────────────
+router.post('/upload', authenticate, upload.single('file'), misc.uploadFile);
+
 // ─── Provider Public Profile & Earnings ───────────────────────────────────────
 router.get('/providers/:username', misc.getProviderProfile);
 router.get('/earnings', authenticate, requireRole('provider'), misc.getProviderEarnings);
