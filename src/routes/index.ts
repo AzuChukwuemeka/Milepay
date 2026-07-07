@@ -55,7 +55,7 @@ router.get('/verify-email', async (req, res) => {
       <body>
         <h1>Milepay Verification Successful</h1>
         <p>Your email has been verified. You can now sign in.</p>
-        <a href="${frontendSignInUrl}/login">
+        <a href="${frontendSignInUrl}">
           Go back to Login
         </a>
       </body>
