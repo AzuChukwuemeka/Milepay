@@ -164,6 +164,7 @@ export class ProjectService {
               amount: project.total_amount,
               currency: project.currency,
           },
+          _debug_raw_nomba_response: virtualAccount
       };
   }
 
