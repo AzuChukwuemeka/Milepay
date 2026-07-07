@@ -157,27 +157,38 @@ export async function createVirtualAccount(params: {
 }
 // ─── Transfers ────────────────────────────────────────────────────────────────
 
-export async function fetchBanks(): Promise<Array<{ code: string; name: string }>> {
+export async function fetchBanks(): Promise<Array<{ code: string; name: string; logo: string }>> {
   try {
     const token = await getNombaToken();
-    const accountId = PARENT_ACCOUNT_ID;
 
     const response = await fetch(`${NOMBA_BASE_URL}/v1/transfers/banks`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'accountId': accountId,
+        'accountId': PARENT_ACCOUNT_ID,
       },
     });
 
-    const raw = await response.json() as { code: string; data: { results: Array<{ code: string; name: string }> } };
-    console.log('NOMBA BANKS RAW:', JSON.stringify(raw));
-    return raw.data.results ?? [];
+    const raw = await response.json() as {
+      code: string;
+      data: Array<{ code: string; name: string; nipCode: string | null; logo: string }>;
+    };
+
+    if (raw.code !== '00' || !raw.data) {
+      throw new Error(`Nomba banks fetch failed: ${raw.code}`);
+    }
+
+    return raw.data.map(bank => ({
+      code: bank.code.trim(),
+      name: bank.name.trim(),
+      logo: bank.logo ?? '',
+    }));
   } catch (err) {
     console.error('FETCH BANKS ERROR:', err);
     throw err;
   }
 }
+
 export async function initiateTransfer(params: {
   amount: number;
   bankCode: string;

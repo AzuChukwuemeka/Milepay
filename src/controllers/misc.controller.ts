@@ -465,7 +465,7 @@ export const clientConfirm = async (req: Request, res: Response, next: NextFunct
  *   post:
  *     tags: [Onboarding]
  *     summary: Lookup/verify a bank account number via Nomba
- *     description: Resolves a bank account number to get the account holder's name. Used for verifying bank details before saving.
+ *     description: Resolves a bank account number to get the account holder's name. Get `bankCode` from `GET /banks`. Used for verifying bank details before saving during onboarding or settings update.
  *     requestBody:
  *       required: true
  *       content:
@@ -477,7 +477,7 @@ export const clientConfirm = async (req: Request, res: Response, next: NextFunct
  *               bankCode:
  *                 type: string
  *                 example: "044"
- *                 description: Bank code from GET /banks
+ *                 description: Bank code from GET /banks — use the `code` field
  *               accountNumber:
  *                 type: string
  *                 example: "1938813553"
@@ -492,12 +492,14 @@ export const clientConfirm = async (req: Request, res: Response, next: NextFunct
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
  *                   type: object
  *                   properties:
  *                     accountName:
  *                       type: string
  *                       example: "John Doe"
+ *                       description: Verified account holder name from NIP
  *                     accountNumber:
  *                       type: string
  *                       example: "1938813553"
@@ -508,10 +510,15 @@ export const clientConfirm = async (req: Request, res: Response, next: NextFunct
  *                       type: string
  *                       example: "Access Bank"
  *       400:
- *         description: Missing bankCode or accountNumber
+ *         description: Missing or invalid fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiError'
  *       500:
  *         description: Nomba lookup failed
  */
+
 export const bankLookup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { bankCode, accountNumber } = req.body;
@@ -544,23 +551,36 @@ export const bankLookup = async (req: Request, res: Response, next: NextFunction
  *   get:
  *     tags: [Onboarding]
  *     summary: Get list of Nigerian banks from Nomba (no auth required)
+ *     description: Returns all supported Nigerian banks with their codes, names and logos. Sourced live from Nomba API with hardcoded fallback. Use the `code` field as `bankCode` in transfer and account lookup requests.
  *     responses:
  *       200:
- *         description: List of banks with code and name
+ *         description: List of Nigerian banks
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   code:
- *                     type: string
- *                     example: "058"
- *                   name:
- *                     type: string
- *                     example: "Guaranty Trust Bank"
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       code:
+ *                         type: string
+ *                         example: "044"
+ *                         description: Bank code to use in bankCode field for transfers and lookups
+ *                       name:
+ *                         type: string
+ *                         example: "Access Bank"
+ *                       logo:
+ *                         type: string
+ *                         example: "https://firebasestorage.googleapis.com/..."
+ *                         description: Bank logo URL. May be empty string if no logo available.
  */
+
 export const getBanks = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const banks = await fetchBanks();
