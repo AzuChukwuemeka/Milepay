@@ -8,8 +8,8 @@ export class AuditRepository {
     projectId: string;
     milestoneId?: string;
     eventType: string;
-    actorId?: string;
-    actorRole?: string;
+    actorId?: string | null;
+    actorRole?: string | null;
     metadata?: Record<string, unknown>;
   }): Promise<void> {
     await pool.query(

@@ -225,64 +225,97 @@ export async function initiateTransfer(params: {
   narration: string;
   idempotencyKey: string;
 }): Promise<TransferOutcome> {
+
   const token = await getNombaToken();
 
-  const response = await fetch(`${NOMBA_BASE_URL}/v2/transfers/bank`, {
+  const resolvedAccount = await resolveBankAccount({
+    accountNumber: params.accountNumber,
+    bankCode: params.bankCode,
+  });
+
+
+  const response = await fetch(`${NOMBA_BASE_URL}/v2/transfers/bank/${SUB_ACCOUNT_ID}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
       'accountId': PARENT_ACCOUNT_ID,
     },
+
     body: JSON.stringify({
       amount: params.amount,
       accountNumber: params.accountNumber,
-      accountName: params.accountName,
+      accountName:
+        resolvedAccount.accountName ??
+        params.accountName,
       bankCode: params.bankCode,
       merchantTxRef: params.idempotencyKey,
-      senderName: params.accountName,
+
+      senderName: 'MilePay',
+
       narration: params.narration,
     }),
   });
 
+
   const rawResponse = await response.text();
+
   let parsed: NombaTransferResponse;
+
   try {
     parsed = JSON.parse(rawResponse);
   } catch {
-    return { outcome: 'FAILED', reason: `Nomba invalid transfer response: ${rawResponse}` };
+    return {
+      outcome: 'FAILED',
+      reason: `Nomba invalid transfer response: ${rawResponse}`,
+    };
   }
 
-  console.log('NOMBA TRANSFER RESPONSE:', JSON.stringify(parsed, null, 2));
+
+  console.log(
+    'NOMBA TRANSFER RESPONSE:',
+    JSON.stringify(parsed, null, 2)
+  );
+
 
   const status = parsed?.data?.status;
 
-  // 201 = "Unable to process response, please rely on webhook" — explicitly
-  // documented as a pending state, not an error, even though it's a non-2xx-ish
-  // marker in Nomba's own examples.
-  if (response.status === 201 || status === 'PENDING_BILLING' || status === 'NEW') {
-    return { outcome: 'PENDING', data: parsed.data };
+
+  if (
+    response.status === 201 ||
+    status === 'PENDING_BILLING' ||
+    status === 'NEW'
+  ) {
+    return {
+      outcome: 'PENDING',
+      data: parsed.data,
+    };
   }
 
-  if (status === 'REFUND') {
-    return { outcome: 'FAILED', reason: `Transfer refunded by Nomba (id: ${parsed.data?.id})` };
-  }
-
-  if (!response.ok) {
-    return { outcome: 'FAILED', reason: parsed?.description || response.statusText };
-  }
 
   if (status === 'SUCCESS') {
-    return { outcome: 'SUCCESS', data: parsed.data };
+    return {
+      outcome: 'SUCCESS',
+      data: parsed.data,
+    };
   }
 
-  // Unknown/unexpected status: Nomba's own guidance is "treat unknown
-  // responses as PENDING" and let the webhook / requery resolve it, rather
-  // than guessing it succeeded or failed.
-  console.warn(`Unexpected Nomba transfer status "${status}" — treating as PENDING`);
-  return { outcome: 'PENDING', data: parsed.data };
-}
 
+  if (status === 'REFUND') {
+    return {
+      outcome: 'FAILED',
+      reason: `Transfer refunded by Nomba (id: ${parsed.data?.id})`,
+    };
+  }
+
+
+  return {
+    outcome: 'FAILED',
+    reason:
+      parsed.description ||
+      `Transfer failed: ${status}`,
+  };
+}
 // ─── Bank Account Resolution ──────────────────────────────────────────────────
 
 export async function resolveBankAccount(params: {

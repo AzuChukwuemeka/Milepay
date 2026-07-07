@@ -171,8 +171,8 @@ export interface AuditEvent {
   project_id: string;
   milestone_id: string | null;
   event_type: string;
-  actor_id: string | null;
-  actor_role: string | null;
+  actor_id: string | null | undefined;
+  actor_role: string | null | undefined;
   metadata: Record<string, unknown>;
   created_at: Date;
 }
