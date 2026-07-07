@@ -100,9 +100,9 @@ const bootstrap = async (): Promise<void> => {
   startCronJobs();
 
   app.listen(PORT, () => {
-    console.log(`\n🚀 MilePay API running on http://localhost:${PORT}`);
-    console.log(`📚 Swagger docs at http://localhost:${PORT}/docs`);
-    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}\n`);
+    console.log(`\nMilePay API running on http://localhost:${PORT}`);
+    console.log(`Swagger docs at http://localhost:${PORT}/docs`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}\n`);
   });
 };
 
