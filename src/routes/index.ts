@@ -165,7 +165,7 @@ router.post('/banks/lookup', misc.bankLookup);
 router.get('/banks', misc.getBanks);
 
 // ─── Generic Upload (Cloudinary) ──────────────────────────────────────────────
-router.post('/upload', authenticate, upload.single('file'), misc.uploadFile);
+router.post('/uploads', authenticate, upload.single('file'), misc.uploadFile);
 
 // ─── Provider Public Profile & Earnings ───────────────────────────────────────
 router.get('/providers/:username', misc.getProviderProfile);

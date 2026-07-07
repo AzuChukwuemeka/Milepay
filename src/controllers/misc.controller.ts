@@ -43,7 +43,7 @@ const NIGERIAN_BANKS: Record<string, string> = {
 
 /**
  * @swagger
- * /upload:
+ * /uploads:
  *   post:
  *     tags: [Uploads]
  *     summary: Upload a single file to Cloudinary and get back its URL
