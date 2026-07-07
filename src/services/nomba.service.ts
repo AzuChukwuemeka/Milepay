@@ -159,21 +159,25 @@ export async function createVirtualAccount(params: {
 
 export async function fetchBanks(): Promise<Array<{ code: string; name: string }>> {
   try {
-    const data = await nombaRequest<{ 
-      code: string; 
-      data: { results: Array<{ code: string; name: string }> } 
-    }>(
-      'GET',
-      '/v1/transfers/banks'
-    );
-    console.log('FETCH BANKS RESPONSE:', JSON.stringify(data));
-    return data.data.results;
+    const token = await getNombaToken();
+    const accountId = PARENT_ACCOUNT_ID;
+
+    const response = await fetch(`${NOMBA_BASE_URL}/v1/transfers/banks`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'accountId': accountId,
+      },
+    });
+
+    const raw = await response.json() as { code: string; data: { results: Array<{ code: string; name: string }> } };
+    console.log('NOMBA BANKS RAW:', JSON.stringify(raw));
+    return raw.data.results ?? [];
   } catch (err) {
     console.error('FETCH BANKS ERROR:', err);
     throw err;
   }
 }
-
 export async function initiateTransfer(params: {
   amount: number;
   bankCode: string;
